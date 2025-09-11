@@ -1,15 +1,15 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { FileSpreadsheet, Download, Upload, Settings, CheckCircle, XCircle, ExternalLink } from "lucide-react"
+import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { FileSpreadsheet, Download, Upload, Settings, CheckCircle, XCircle, ExternalLink } from "lucide-react";
 import {
   exportToGoogleSheets,
   formatAttendanceForSheets,
@@ -17,87 +17,83 @@ import {
   generateCSV,
   getDefaultSheetsConfig,
   type GoogleSheetsConfig,
-} from "@/lib/google-sheets"
-import { getAllAttendanceRecords, getAllStudents, getAllEvents } from "@/lib/database"
+} from "@/lib/google-sheets";
+import type { AttendanceRecord, Student, Event } from "@/lib/types";
 
-interface ExportResult {
-  success: boolean
-  message: string
-  url?: string
+interface GoogleSheetsExportProps {
+  attendanceRecords: AttendanceRecord[];
+  students: Student[];
+  events: Event[];
 }
 
-export function GoogleSheetsExport() {
-  const [isExporting, setIsExporting] = useState(false)
-  const [exportResult, setExportResult] = useState<ExportResult | null>(null)
-  const [config, setConfig] = useState<GoogleSheetsConfig>(getDefaultSheetsConfig())
-  const [isConfigOpen, setIsConfigOpen] = useState(false)
-
-  const attendanceRecords = getAllAttendanceRecords()
-  const students = getAllStudents()
-  const events = getAllEvents()
+export function GoogleSheetsExport({ attendanceRecords, students, events }: GoogleSheetsExportProps) {
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  const [config, setConfig] = useState<GoogleSheetsConfig>(getDefaultSheetsConfig());
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
 
   const handleExportAttendance = async () => {
-    setIsExporting(true)
-    setExportResult(null)
+    setIsExporting(true);
+    setExportResult(null);
 
     try {
-      const sheetData = formatAttendanceForSheets(attendanceRecords, students, events)
-      const result = await exportToGoogleSheets(sheetData, config)
-      setExportResult(result)
+      const sheetData = formatAttendanceForSheets(attendanceRecords, students, events);
+      const result = await exportToGoogleSheets(sheetData, config);
+      setExportResult(result);
     } catch (error) {
       setExportResult({
         success: false,
         message: "Произошла ошибка при экспорте данных",
-      })
+      });
     } finally {
-      setIsExporting(false)
+      setIsExporting(false);
     }
-  }
+  };
 
   const handleExportStudents = async () => {
-    setIsExporting(true)
-    setExportResult(null)
+    setIsExporting(true);
+    setExportResult(null);
 
     try {
-      const sheetData = formatStudentsForSheets(students)
-      const result = await exportToGoogleSheets(sheetData, config)
-      setExportResult(result)
+      const sheetData = formatStudentsForSheets(students);
+      const result = await exportToGoogleSheets(sheetData, config);
+      setExportResult(result);
     } catch (error) {
       setExportResult({
         success: false,
         message: "Произошла ошибка при экспорте данных",
-      })
+      });
     } finally {
-      setIsExporting(false)
+      setIsExporting(false);
     }
-  }
+  };
 
   const handleDownloadCSV = (type: "attendance" | "students") => {
-    let data: (string | number)[][]
-    let filename: string
+    let data: (string | number)[][];
+    let filename: string;
 
     if (type === "attendance") {
-      data = formatAttendanceForSheets(attendanceRecords, students, events)
-      filename = `attendance-${new Date().toISOString().split("T")[0]}.csv`
+      data = formatAttendanceForSheets(attendanceRecords, students, events);
+      filename = `attendance-${new Date().toISOString().split("T")[0]}.csv`;
     } else {
-      data = formatStudentsForSheets(students)
-      filename = `students-${new Date().toISOString().split("T")[0]}.csv`
+      data = formatStudentsForSheets(students);
+      filename = `students-${new Date().toISOString().split("T")[0]}.csv`;
     }
 
-    const csvContent = generateCSV(data)
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const link = document.createElement("a")
+    const csvContent = generateCSV(data);
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
 
     if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob)
-      link.setAttribute("href", url)
-      link.setAttribute("download", filename)
-      link.style.visibility = "hidden"
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
-  }
+  };
 
   return (
     <div className="space-y-6">
@@ -105,12 +101,14 @@ export function GoogleSheetsExport() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <FileSpreadsheet className="h-5 w-5" />
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-2 text-lg truncate">
+                <FileSpreadsheet className="h-5 w-5 flex-shrink-0" />
                 Экспорт в Google Sheets
               </CardTitle>
-              <CardDescription>Экспортируйте данные посещаемости и учеников в Google Sheets</CardDescription>
+              <CardDescription className="truncate">
+                Экспортируйте данные посещаемости и учеников в Google Sheets
+              </CardDescription>
             </div>
             <Dialog open={isConfigOpen} onOpenChange={setIsConfigOpen}>
               <DialogTrigger asChild>
@@ -131,6 +129,7 @@ export function GoogleSheetsExport() {
                       value={config.spreadsheetId}
                       onChange={(e) => setConfig({ ...config, spreadsheetId: e.target.value })}
                       placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                      disabled={isExporting}
                     />
                   </div>
                   <div>
@@ -141,6 +140,7 @@ export function GoogleSheetsExport() {
                       value={config.apiKey}
                       onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
                       placeholder="Введите API ключ"
+                      disabled={isExporting}
                     />
                   </div>
                   <div>
@@ -150,6 +150,7 @@ export function GoogleSheetsExport() {
                       value={config.range}
                       onChange={(e) => setConfig({ ...config, range: e.target.value })}
                       placeholder="Sheet1!A1:Z1000"
+                      disabled={isExporting}
                     />
                   </div>
                 </div>
@@ -166,18 +167,19 @@ export function GoogleSheetsExport() {
 
             <TabsContent value="attendance" className="space-y-4">
               <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <h3 className="font-semibold">Данные посещаемости</h3>
-                  <p className="text-sm text-muted-foreground">
+                <div className="min-w-0">
+                  <h3 className="font-semibold truncate">Данные посещаемости</h3>
+                  <p className="text-sm text-muted-foreground truncate">
                     Экспорт всех записей посещаемости ({attendanceRecords.length} записей)
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-shrink-0">
                   <Button
                     onClick={() => handleDownloadCSV("attendance")}
                     variant="outline"
                     size="sm"
                     className="bg-transparent"
+                    disabled={isExporting}
                   >
                     <Download className="h-4 w-4 mr-2" />
                     CSV
@@ -192,18 +194,19 @@ export function GoogleSheetsExport() {
 
             <TabsContent value="students" className="space-y-4">
               <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <h3 className="font-semibold">Список учеников</h3>
-                  <p className="text-sm text-muted-foreground">
+                <div className="min-w-0">
+                  <h3 className="font-semibold truncate">Список учеников</h3>
+                  <p className="text-sm text-muted-foreground truncate">
                     Экспорт всех учеников с QR-кодами ({students.length} учеников)
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-shrink-0">
                   <Button
                     onClick={() => handleDownloadCSV("students")}
                     variant="outline"
                     size="sm"
                     className="bg-transparent"
+                    disabled={isExporting}
                   >
                     <Download className="h-4 w-4 mr-2" />
                     CSV
@@ -295,5 +298,5 @@ export function GoogleSheetsExport() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

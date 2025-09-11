@@ -82,7 +82,11 @@ export default async function ReportsPage() {
 
         {/* Google Sheets Export */}
         <div className="mb-8">
-          <GoogleSheetsExport />
+          <GoogleSheetsExport
+            attendanceRecords={attendanceRecords}
+            students={students}
+            events={events}
+          />
         </div>
 
         {/* Attendance by Event */}
