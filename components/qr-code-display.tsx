@@ -31,28 +31,49 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
 
     // Generate QR code for canvas
     if (canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, student.qrCode, { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err) => {
-        if (err) {
-          console.error("QR Code Canvas Error:", err);
-          setError("Ошибка генерации QR-кода");
-        }
-      });
+      try {
+        QRCode.toCanvas(canvasRef.current, student.qrCode, { 
+          width: 256, 
+          margin: 2, 
+          errorCorrectionLevel: "H" 
+        }, (err) => {
+          if (err) {
+            console.error("QR Code Canvas Error:", err);
+            setError("Ошибка генерации QR-кода");
+            setQRCodeURL("");
+          }
+        });
+      } catch (err) {
+        console.error("QR Code Canvas Error:", err);
+        setError("Ошибка генерации QR-кода");
+        setQRCodeURL("");
+      }
     }
 
     // Generate QR code for print/download
-    QRCode.toDataURL(student.qrCode, { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
-      if (err) {
-        console.error("QR Code URL Error:", err);
-        setError("Ошибка генерации URL QR-кода");
-      } else {
-        setQRCodeURL(url);
-      }
-    });
+    try {
+      QRCode.toDataURL(student.qrCode, { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
+        if (err) {
+          console.error("QR Code URL Error:", err);
+          setError("Ошибка генерации URL QR-кода");
+          setQRCodeURL("");
+        } else {
+          setQRCodeURL(url);
+        }
+      });
+    } catch (err) {
+      console.error("QR Code URL Error:", err);
+      setError("Ошибка генерации URL QR-кода");
+      setQRCodeURL("");
+    }
   };
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && student.qrCode) {
       generateQRCode();
+    } else {
+      setQRCodeURL("");
+      setError(null);
     }
   }, [isOpen, student.qrCode]);
 
@@ -162,8 +183,10 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
             <div className="p-4 bg-white rounded-lg border-2 border-primary/20">
               {error ? (
                 <p className="w-64 h-64 flex items-center justify-center text-red-500 text-center">{error}</p>
+              ) : qrCodeURL ? (
+                <img src={qrCodeURL} alt="QR-код" className="w-64 h-64" />
               ) : (
-                <canvas ref={canvasRef} className="w-64 h-64" />
+                <p className="w-64 h-64 flex items-center justify-center text-gray-500 text-center">Генерация QR-кода...</p>
               )}
             </div>
           </div>
@@ -173,11 +196,11 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
           </div>
 
           <div className="flex gap-2">
-            <Button onClick={handlePrint} className="flex-1" disabled={!qrCodeURL}>
+            <Button onClick={handlePrint} className="flex-1" disabled={!qrCodeURL || !!error}>
               <Print className="h-4 w-4 mr-2" />
               Печать
             </Button>
-            <Button onClick={handleDownload} variant="outline" className="flex-1 bg-transparent" disabled={!qrCodeURL}>
+            <Button onClick={handleDownload} variant="outline" className="flex-1 bg-transparent" disabled={!qrCodeURL || !!error}>
               <Download className="h-4 w-4 mr-2" />
               Скачать
             </Button>

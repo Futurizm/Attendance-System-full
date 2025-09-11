@@ -1,170 +1,325 @@
-import type { Student, AttendanceRecord, Event } from "./types"
+import { createBrowserSupabaseClient } from "./supabase-client";
+import type { Student, AttendanceRecord, Event } from "./types";
 
-// In-memory storage (in production, this would be replaced with a real database)
-const students: Student[] = [
-  {
-    id: "1",
-    name: "Иван Петров",
-    group: "ИТ-21",
-    course: 3,
-    specialty: "Информационные технологии",
-    qrCode: "STU001",
-    createdAt: new Date("2024-01-15"),
-  },
-  {
-    id: "2",
-    name: "Мария Сидорова",
-    group: "ИТ-21",
-    course: 3,
-    specialty: "Информационные технологии",
-    qrCode: "STU002",
-    createdAt: new Date("2024-01-15"),
-  },
-  {
-    id: "3",
-    name: "Алексей Иванов",
-    group: "ПИ-22",
-    course: 2,
-    specialty: "Программирование в компьютерных системах",
-    qrCode: "STU003",
-    createdAt: new Date("2024-01-15"),
-  },
-  {
-    id: "4",
-    name: "Елена Козлова",
-    group: "ИБ-20",
-    course: 4,
-    specialty: "Информационная безопасность",
-    qrCode: "STU004",
-    createdAt: new Date("2024-01-15"),
-  },
-  {
-    id: "5",
-    name: "Дмитрий Волков",
-    group: "ПИ-23",
-    course: 1,
-    specialty: "Программирование в компьютерных системах",
-    qrCode: "STU005",
-    createdAt: new Date("2024-01-15"),
-  },
-  {
-    id: "6",
-    name: "Анна Смирнова",
-    group: "ИТ-22",
-    course: 2,
-    specialty: "Информационные технологии",
-    qrCode: "STU006",
-    createdAt: new Date("2024-01-15"),
-  },
-]
-
-const attendanceRecords: AttendanceRecord[] = []
-
-const events: Event[] = [
-  {
-    id: "1",
-    name: "Хакатон по веб-разработке",
-    date: new Date(),
-    description: "Соревнование по созданию веб-приложений",
-    isActive: true,
-  },
-  {
-    id: "2",
-    name: "Лекция по кибербезопасности",
-    date: new Date(Date.now() + 86400000),
-    description: "Внеклассная лекция о современных угрозах в IT",
-    isActive: false,
-  },
-]
+const supabase = createBrowserSupabaseClient();
 
 // Student management functions
-export const getAllStudents = (): Student[] => {
-  return [...students]
-}
+export const getAllStudents = async (): Promise<Student[]> => {
+  const { data, error } = await supabase.from("students").select("*").order("created_at", { ascending: false });
 
-export const getStudentById = (id: string): Student | undefined => {
-  return students.find((student) => student.id === id)
-}
-
-export const getStudentByQRCode = (qrCode: string): Student | undefined => {
-  return students.find((student) => student.qrCode === qrCode)
-}
-
-export const addStudent = (student: Omit<Student, "id" | "createdAt">): Student => {
-  const newStudent: Student = {
-    ...student,
-    id: Date.now().toString(),
-    createdAt: new Date(),
+  if (error) {
+    console.error("Error fetching students:", error)
+    return []
   }
-  students.push(newStudent)
-  return newStudent
-}
 
-export const updateStudent = (id: string, updates: Partial<Student>): Student | null => {
-  const index = students.findIndex((student) => student.id === id)
-  if (index === -1) return null
+  return data.map((student) => ({
+    id: student.id,
+    name: student.name,
+    group: student.group,
+    course: student.course,
+    specialty: student.specialty,
+    qrCode: student.qr_code,
+    createdAt: new Date(student.created_at),
+  }))
+};
 
-  students[index] = { ...students[index], ...updates }
-  return students[index]
-}
+export const getStudentById = async (id: string): Promise<Student | null> => {
+  const { data, error } = await supabase.from("students").select("*").eq("id", id).single();
 
-export const deleteStudent = (id: string): boolean => {
-  const index = students.findIndex((student) => student.id === id)
-  if (index === -1) return false
+  if (error) {
+    console.error("Error fetching student:", error)
+    return null
+  }
 
-  students.splice(index, 1)
+  return {
+    id: data.id,
+    name: data.name,
+    group: data.group,
+    course: data.course,
+    specialty: data.specialty,
+    qrCode: data.qr_code,
+    createdAt: new Date(data.created_at),
+  }
+};
+
+export const getStudentByQRCode = async (qrCode: string): Promise<Student | null> => {
+  const { data, error } = await supabase.from("students").select("*").eq("qr_code", qrCode).single();
+
+  if (error) {
+    console.error("Error fetching student by QR code:", error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    group: data.group,
+    course: data.course,
+    specialty: data.specialty,
+    qrCode: data.qr_code,
+    createdAt: new Date(data.created_at),
+  }
+};
+
+export const addStudent = async (student: Omit<Student, "id" | "createdAt">): Promise<Student | null> => {
+  const { data, error } = await supabase
+    .from("students")
+    .insert({
+      name: student.name,
+      group: student.group,
+      course: student.course,
+      specialty: student.specialty,
+      qr_code: student.qrCode,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error adding student:", error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    group: data.group,
+    course: data.course,
+    specialty: data.specialty,
+    qrCode: data.qr_code,
+    createdAt: new Date(data.created_at),
+  }
+};
+
+export const updateStudent = async (id: string, updates: Partial<Omit<Student, "id" | "createdAt">>): Promise<Student | null> => {
+  const updateData: any = {}
+  if (updates.name) updateData.name = updates.name
+  if (updates.group) updateData.group = updates.group
+  if (updates.course) updateData.course = updates.course
+  if (updates.specialty) updateData.specialty = updates.specialty
+  if (updates.qrCode) updateData.qr_code = updates.qrCode
+
+  const { data, error } = await supabase.from("students").update(updateData).eq("id", id).select().single();
+
+  if (error) {
+    console.error("Error updating student:", error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    group: data.group,
+    course: data.course,
+    specialty: data.specialty,
+    qrCode: data.qr_code,
+    createdAt: new Date(data.created_at),
+  }
+};
+
+export const deleteStudent = async (id: string): Promise<boolean> => {
+  const { error } = await supabase.from("students").delete().eq("id", id);
+
+  if (error) {
+    console.error("Error deleting student:", error)
+    return false
+  }
+
   return true
-}
+};
 
 // Attendance management functions
-export const getAllAttendanceRecords = (): AttendanceRecord[] => {
-  return [...attendanceRecords]
-}
+export const getAllAttendanceRecords = async (): Promise<AttendanceRecord[]> => {
+  const { data, error } = await supabase
+    .from("attendance_records")
+    .select(`
+      *,
+      student:student_id (name)
+    `)
+    .order("timestamp", { ascending: false });
 
-export const addAttendanceRecord = (record: Omit<AttendanceRecord, "id">): AttendanceRecord => {
-  const newRecord: AttendanceRecord = {
-    ...record,
-    id: Date.now().toString(),
+  if (error) {
+    console.error("Error fetching attendance records:", error)
+    return []
   }
-  attendanceRecords.push(newRecord)
-  return newRecord
-}
 
-export const getAttendanceByEvent = (eventName: string): AttendanceRecord[] => {
-  return attendanceRecords.filter((record) => record.eventName === eventName)
-}
+  return data.map((record) => ({
+    id: record.id,
+    studentId: record.student_id,
+    studentName: record.student.name,
+    eventName: record.event_name,
+    timestamp: new Date(record.timestamp),
+    scannedBy: record.scanned_by,
+  }))
+};
 
-export const getAttendanceByStudent = (studentId: string): AttendanceRecord[] => {
-  return attendanceRecords.filter((record) => record.studentId === studentId)
-}
+export const addAttendanceRecord = async (record: Omit<AttendanceRecord, "id">): Promise<AttendanceRecord | null> => {
+  const { data, error } = await supabase
+    .from("attendance_records")
+    .insert({
+      student_id: record.studentId,
+      event_name: record.eventName,
+      timestamp: record.timestamp.toISOString(),
+      scanned_by: record.scannedBy,
+    })
+    .select(`
+      *,
+      student:student_id (name)
+    `)
+    .single();
+
+  if (error) {
+    console.error("Error adding attendance record:", error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    studentId: data.student_id,
+    studentName: data.student.name,
+    eventName: data.event_name,
+    timestamp: new Date(data.timestamp),
+    scannedBy: data.scanned_by,
+  }
+};
+
+export const checkAttendanceExists = async (studentId: string, eventName: string): Promise<boolean> => {
+  const { data, error } = await supabase
+    .from("attendance_records")
+    .select("id")
+    .eq("student_id", studentId)
+    .eq("event_name", eventName)
+    .limit(1);
+
+  if (error) {
+    console.error("Error checking attendance:", error)
+    return false
+  }
+
+  return data.length > 0
+};
+
+export const getAttendanceByEvent = async (eventName: string): Promise<AttendanceRecord[]> => {
+  const { data, error } = await supabase
+    .from("attendance_records")
+    .select(`
+      *,
+      student:student_id (name, group, course)
+    `)
+    .eq("event_name", eventName)
+    .order("timestamp", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching attendance by event:", error)
+    return []
+  }
+
+  return data.map((record) => ({
+    id: record.id,
+    studentId: record.student_id,
+    studentName: record.student.name,
+    eventName: record.event_name,
+    timestamp: new Date(record.timestamp),
+    scannedBy: record.scanned_by,
+  }))
+};
+
+export const getAttendanceByStudent = async (studentId: string): Promise<AttendanceRecord[]> => {
+  const { data, error } = await supabase
+    .from("attendance_records")
+    .select("*")
+    .eq("student_id", studentId)
+    .order("timestamp", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching attendance by student:", error)
+    return []
+  }
+
+  return data.map((record) => ({
+    id: record.id,
+    studentId: record.student_id,
+    studentName: "", // Fill if needed
+    eventName: record.event_name,
+    timestamp: new Date(record.timestamp),
+    scannedBy: record.scanned_by,
+  }))
+};
 
 // Event management functions
-export const getAllEvents = (): Event[] => {
-  return [...events]
-}
+export const getAllEvents = async (): Promise<Event[]> => {
+  const { data, error } = await supabase.from("events").select("*").order("date", { ascending: false });
 
-export const getActiveEvent = (): Event | undefined => {
-  return events.find((event) => event.isActive)
-}
-
-export const addEvent = (event: Omit<Event, "id">): Event => {
-  const newEvent: Event = {
-    ...event,
-    id: Date.now().toString(),
+  if (error) {
+    console.error("Error fetching events:", error)
+    return []
   }
-  events.push(newEvent)
-  return newEvent
-}
 
-export const setActiveEvent = (eventId: string): boolean => {
-  // Deactivate all events
-  events.forEach((event) => (event.isActive = false))
+  return data.map((event) => ({
+    id: event.id,
+    name: event.name,
+    date: new Date(event.date),
+    description: event.description,
+    isActive: event.is_active,
+  }))
+};
 
-  // Activate the selected event
-  const event = events.find((e) => e.id === eventId)
-  if (event) {
-    event.isActive = true
-    return true
+export const getActiveEvents = async (): Promise<Event[]> => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0) // Start of today
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .eq("is_active", true)
+    .gte("date", today.toISOString())
+    .order("date", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching active events:", error)
+    return []
   }
-  return false
-}
+
+  return data.map((event) => ({
+    id: event.id,
+    name: event.name,
+    date: new Date(event.date),
+    description: event.description,
+    isActive: event.is_active,
+  }))
+};
+
+export const addEvent = async (event: Omit<Event, "id">): Promise<Event | null> => {
+  const { data, error } = await supabase
+    .from("events")
+    .insert({
+      name: event.name,
+      date: event.date.toISOString(),
+      description: event.description,
+      is_active: event.isActive,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error adding event:", error)
+    return null
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    date: new Date(data.date),
+    description: data.description,
+    isActive: data.is_active,
+  }
+};
+
+export const toggleEventActive = async (eventId: string, isActive: boolean): Promise<boolean> => {
+  const { error } = await supabase.from("events").update({ is_active: isActive }).eq("id", eventId);
+
+  if (error) {
+    console.error("Error toggling event active status:", error)
+    return false
+  }
+
+  return true
+};

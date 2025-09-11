@@ -4,10 +4,11 @@ import QrScanner from "qr-scanner";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { RotateCcw, Flashlight, FlashlightOff } from "lucide-react";
-import { addAttendanceRecord, getActiveEvent, getStudentByQRCode } from "@/lib/database-supabase";
+import { addAttendanceRecord, getActiveEvents, getStudentByQRCode, checkAttendanceExists } from "@/lib/database";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, XCircle } from "lucide-react";
+import type { Event } from "@/lib/types";
 
 interface QRScannerProps {
   onScanSuccess?: () => void;
@@ -25,14 +26,33 @@ export function QRScanner({ onScanSuccess }: QRScannerProps) {
     success: boolean;
     message: string;
     studentName?: string;
+    eventName?: string;
     timestamp: Date;
   } | null>(null);
+  const [activeEvents, setActiveEvents] = useState<Event[]>([]);
+
+  // Fetch active events on mount
+  useEffect(() => {
+    const fetchActiveEvents = async () => {
+      try {
+        const events = await getActiveEvents();
+        setActiveEvents(events);
+        if (events.length === 0) {
+          setError("Нет активных мероприятий на сегодня или в будущем");
+        }
+      } catch (err: any) {
+        setError("Ошибка при загрузке активных мероприятий: " + (err.message || "Неизвестная ошибка"));
+        console.error("Error fetching active events:", err);
+      }
+    };
+    fetchActiveEvents();
+  }, []);
 
   const startScanner = async () => {
     if (videoRef.current && !scanner) {
       try {
         setError(null);
-        console.log("Starting QR scanner with facingMode:", facingMode); // Debug log
+        console.log("Starting QR scanner with facingMode:", facingMode);
         const qrScanner = new QrScanner(
           videoRef.current,
           async (result) => {
@@ -43,7 +63,7 @@ export function QRScanner({ onScanSuccess }: QRScannerProps) {
             setScanning(false);
             setScanner(null);
 
-            console.log("Scanned QR code:", result.data); // Debug log
+            console.log("Scanned QR code:", result.data);
             try {
               const student = await getStudentByQRCode(result.data);
               if (!student) {
@@ -56,18 +76,32 @@ export function QRScanner({ onScanSuccess }: QRScannerProps) {
                 return;
               }
 
-              const activeEvent = await getActiveEvent();
-              if (!activeEvent) {
+              if (activeEvents.length === 0) {
                 setScanResult({
                   success: false,
-                  message: "Нет активного мероприятия",
+                  message: "Нет активных мероприятий",
                   timestamp: new Date(),
                 });
-                toast.error("Нет активного мероприятия");
+                toast.error("Нет активных мероприятий");
                 return;
               }
 
-              console.log("Adding attendance for student:", student.id, "Event:", activeEvent.name); // Debug log
+              // Select the first active event (sorted by date)
+              const activeEvent = activeEvents[0];
+              console.log("Checking attendance for student:", student.id, "Event:", activeEvent.name);
+
+              // Check if attendance already exists
+              const attendanceExists = await checkAttendanceExists(student.id, activeEvent.name);
+              if (attendanceExists) {
+                setScanResult({
+                  success: false,
+                  message: `Посещение для ${student.name} уже отмечено для ${activeEvent.name}`,
+                  timestamp: new Date(),
+                });
+                toast.error(`Посещение для ${student.name} уже отмечено`);
+                return;
+              }
+
               const attendanceRecord = await addAttendanceRecord({
                 studentId: student.id,
                 studentName: student.name,
@@ -80,7 +114,8 @@ export function QRScanner({ onScanSuccess }: QRScannerProps) {
                 setScanResult({
                   success: true,
                   studentName: student.name,
-                  message: `Посещение отмечено для ${student.name}`,
+                  eventName: activeEvent.name,
+                  message: `Посещение отмечено для ${student.name} на мероприятии ${activeEvent.name}`,
                   timestamp: new Date(),
                 });
                 toast.success(`Посещение отмечено для ${student.name}`);
@@ -88,7 +123,7 @@ export function QRScanner({ onScanSuccess }: QRScannerProps) {
               } else {
                 setScanResult({
                   success: false,
-                  message: "Ошибка при отметке посещения (возможно, посещение уже отмечено)",
+                  message: "Ошибка при отметке посещения",
                   timestamp: new Date(),
                 });
                 toast.error("Ошибка при отметке посещения");
@@ -96,7 +131,7 @@ export function QRScanner({ onScanSuccess }: QRScannerProps) {
             } catch (error: any) {
               console.error("QR scan error:", error);
               const message = error.message.includes("unique_student_event")
-                ? "Посещение для этого студента уже отмечено"
+                ? `Посещение для этого студента уже отмечено для ${activeEvents[0]?.name || "мероприятия"}`
                 : "Ошибка при обработке QR-кода";
               setScanResult({
                 success: false,
@@ -116,11 +151,11 @@ export function QRScanner({ onScanSuccess }: QRScannerProps) {
 
         await qrScanner.start();
         setScanner(qrScanner);
-        console.log("Scanner started successfully"); // Debug log
+        console.log("Scanner started successfully");
         const flashAvailable = await qrScanner.hasFlash();
         setHasFlash(flashAvailable);
-      } catch (err) {
-        setError("Не удалось получить доступ к камере. Проверьте разрешения.");
+      } catch (err: any) {
+        setError("Не удалось получить доступ к камере. Проверьте разрешения: " + (err.message || "Неизвестная ошибка"));
         console.error("Camera access error:", err);
       }
     }
@@ -134,7 +169,7 @@ export function QRScanner({ onScanSuccess }: QRScannerProps) {
     return () => {
       scanner?.destroy();
       setScanner(null);
-      console.log("Scanner destroyed"); // Debug log
+      console.log("Scanner destroyed");
     };
   }, [scanning, facingMode]);
 
@@ -204,6 +239,9 @@ export function QRScanner({ onScanSuccess }: QRScannerProps) {
             <div className="space-y-2">
               {scanResult.success && scanResult.studentName && (
                 <div className="font-semibold text-green-700">Ученик: {scanResult.studentName}</div>
+              )}
+              {scanResult.success && scanResult.eventName && (
+                <div className="font-semibold text-green-700">Мероприятие: {scanResult.eventName}</div>
               )}
               <div>{scanResult.message}</div>
               <div className="text-sm text-muted-foreground">{scanResult.timestamp.toLocaleString("ru-RU")}</div>

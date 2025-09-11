@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Edit, Trash2, Users } from "lucide-react";
-import { getAllStudents, addStudent, updateStudent, deleteStudent } from "@/lib/database-supabase";
+import { getAllStudents, addStudent, updateStudent, deleteStudent } from "@/lib/database";
 import { QRCodeDisplay } from "@/components/qr-code-display";
 import { BulkQRGenerator } from "@/components/bulk-qr-generator";
 import { useEffect, useState } from "react";
@@ -36,6 +36,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
 
 const studentSchema = z.object({
   name: z.string().min(1, "Имя обязательно"),
@@ -71,10 +72,11 @@ export default function StudentsPage() {
     try {
       setLoading(true);
       const data = await getAllStudents();
-      console.log("Loaded students:", data); // Debug log
+      console.log("Loaded students:", data);
       setStudents(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading students:", error);
+      toast.error("Ошибка при загрузке студентов: " + (error.message || "Неизвестная ошибка"));
     } finally {
       setLoading(false);
     }
@@ -85,6 +87,7 @@ export default function StudentsPage() {
   }, []);
 
   useEffect(() => {
+    const newQrCode = crypto.randomUUID();
     if (editingStudent) {
       form.reset({
         name: editingStudent.name,
@@ -93,9 +96,8 @@ export default function StudentsPage() {
         specialty: editingStudent.specialty,
         qrCode: editingStudent.qrCode,
       });
-      console.log("Editing student QR:", editingStudent.qrCode); // Debug log
+      console.log("Editing student QR:", editingStudent.qrCode);
     } else {
-      const newQrCode = crypto.randomUUID();
       form.reset({
         name: "",
         group: "",
@@ -103,7 +105,7 @@ export default function StudentsPage() {
         specialty: "",
         qrCode: newQrCode,
       });
-      console.log("New QR Code generated:", newQrCode); // Debug log
+      console.log("New QR Code generated:", newQrCode);
     }
   }, [editingStudent, form]);
 
@@ -111,7 +113,7 @@ export default function StudentsPage() {
   useEffect(() => {
     if (isAddOpen && form.watch("qrCode")) {
       setQrError(null);
-      console.log("Generating QR for:", form.watch("qrCode")); // Debug log
+      console.log("Generating QR for:", form.watch("qrCode"));
       QRCode.toDataURL(form.watch("qrCode"), { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
         if (err) {
           console.error("QR Code URL Error in Modal:", err);
@@ -123,16 +125,27 @@ export default function StudentsPage() {
       });
     } else {
       setQrCodeURL("");
+      setQrError(null);
     }
   }, [isAddOpen, form.watch("qrCode")]);
 
   const onSubmit = async (data: StudentFormData) => {
     try {
-      console.log("Submitting student data:", data); // Debug log
+      console.log("Submitting student data:", data);
       if (editingStudent) {
-        await updateStudent(editingStudent.id, data);
+        const updatedStudent = await updateStudent(editingStudent.id, data);
+        if (updatedStudent) {
+          toast.success(`Студент ${data.name} успешно обновлен`);
+        } else {
+          throw new Error("Failed to update student");
+        }
       } else {
-        await addStudent(data);
+        const newStudent = await addStudent(data);
+        if (newStudent) {
+          toast.success(`Студент ${data.name} успешно добавлен`);
+        } else {
+          throw new Error("Failed to add student");
+        }
       }
       setIsAddOpen(false);
       setEditingStudent(null);
@@ -145,16 +158,27 @@ export default function StudentsPage() {
       });
       setQrCodeURL("");
       await loadStudents();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving student:", error);
+      toast.error("Ошибка при сохранении студента: " + (error.message || "Неизвестная ошибка"));
     }
   };
 
   const handleDelete = async () => {
     if (deletingStudent) {
-      await deleteStudent(deletingStudent.id);
-      setDeletingStudent(null);
-      await loadStudents();
+      try {
+        const success = await deleteStudent(deletingStudent.id);
+        if (success) {
+          toast.success(`Студент ${deletingStudent.name} успешно удален`);
+          setDeletingStudent(null);
+          await loadStudents();
+        } else {
+          throw new Error("Failed to delete student");
+        }
+      } catch (error: any) {
+        console.error("Error deleting student:", error);
+        toast.error("Ошибка при удалении студента: " + (error.message || "Неизвестная ошибка"));
+      }
     }
   };
 
@@ -224,7 +248,10 @@ export default function StudentsPage() {
                   </div>
                   <div>
                     <Label htmlFor="course">Курс</Label>
-                    <Select defaultValue={form.watch("course").toString()} onValueChange={(value) => form.setValue("course", parseInt(value))}>
+                    <Select
+                      defaultValue={form.watch("course").toString()}
+                      onValueChange={(value) => form.setValue("course", parseInt(value))}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -257,6 +284,9 @@ export default function StudentsPage() {
                     <Input id="qrCode" {...form.register("qrCode")} type="hidden" />
                   </div>
                   <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
+                      Отмена
+                    </Button>
                     <Button type="submit">{editingStudent ? "Сохранить" : "Добавить"}</Button>
                   </DialogFooter>
                 </form>
@@ -286,7 +316,7 @@ export default function StudentsPage() {
       {/* Students List */}
       <div className="grid gap-4">
         {students.map((student) => {
-          console.log("Rendering student:", student.name, "QR:", student.qrCode); // Debug log
+          console.log("Rendering student:", student.name, "QR:", student.qrCode);
           return (
             <Card key={student.id} className="bg-white border-0 shadow-sm hover:shadow-md transition-shadow">
               <CardContent className="pt-6">
