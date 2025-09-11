@@ -1,29 +1,67 @@
-"use client"
+"use client";
 
-import type React from "react"
-
-import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
-import { Download, Printer as Print, QrCode } from "lucide-react"
-import { generateQRCodeData, generateQRCodeURL } from "@/lib/qr-utils"
-import type { Student } from "@/lib/types"
+import { useEffect, useRef, useState } from "react";
+import QRCode from "qrcode";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Download, Printer as Print, QrCode } from "lucide-react";
+import type { Student } from "@/lib/types";
 
 interface QRCodeDisplayProps {
-  student: Student
-  trigger?: React.ReactNode
+  student: Student;
+  trigger?: React.ReactNode;
 }
 
 export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [qrCodeURL, setQRCodeURL] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
-  const qrData = generateQRCodeData(student.id, student.name)
-  const qrCodeURL = generateQRCodeURL(qrData, 300)
+  const generateQRCode = () => {
+    if (!student.qrCode) {
+      setError("QR-код не задан для этого студента");
+      setQRCodeURL("");
+      return;
+    }
+
+    setError(null);
+
+    // Generate QR code for canvas
+    if (canvasRef.current) {
+      QRCode.toCanvas(canvasRef.current, student.qrCode, { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err) => {
+        if (err) {
+          console.error("QR Code Canvas Error:", err);
+          setError("Ошибка генерации QR-кода");
+        }
+      });
+    }
+
+    // Generate QR code for print/download
+    QRCode.toDataURL(student.qrCode, { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
+      if (err) {
+        console.error("QR Code URL Error:", err);
+        setError("Ошибка генерации URL QR-кода");
+      } else {
+        setQRCodeURL(url);
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      generateQRCode();
+    }
+  }, [isOpen, student.qrCode]);
 
   const handlePrint = () => {
-    const printWindow = window.open("", "_blank")
+    if (!qrCodeURL) {
+      console.error("No QR code URL available for printing");
+      return;
+    }
+    const printWindow = window.open("", "_blank");
     if (printWindow) {
       printWindow.document.write(`
         <html>
@@ -56,12 +94,14 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
               }
             </style>
           </head>
-          <body>
+          <body onload="window.print();window.close()">
             <div class="qr-container">
               <div class="student-info">
                 <h2>${student.name}</h2>
-                <p>Класс: ${student.class}</p>
-                <p>ID: ${student.qrCode}</p>
+                <p>Группа: ${student.group}</p>
+                <p>Курс: ${student.course}</p>
+                <p>Специальность: ${student.specialty}</p>
+                <p>ID: ${student.qrCode || "Не задан"}</p>
               </div>
               <div class="qr-code">
                 <img src="${qrCodeURL}" alt="QR-код для ${student.name}" />
@@ -72,26 +112,29 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
             </div>
           </body>
         </html>
-      `)
-      printWindow.document.close()
-      printWindow.print()
+      `);
+      printWindow.document.close();
     }
-  }
+  };
 
   const handleDownload = () => {
-    const link = document.createElement("a")
-    link.href = qrCodeURL
-    link.download = `qr-${student.name.replace(/\s+/g, "_")}.png`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
+    if (!qrCodeURL) {
+      console.error("No QR code URL available for download");
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = qrCodeURL;
+    link.download = `qr-${student.name.replace(/\s+/g, "_")}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {trigger || (
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" className="border-gray-300 text-gray-700 hover:bg-gray-50">
             <QrCode className="h-4 w-4 mr-2" />
             QR-код
           </Button>
@@ -102,38 +145,39 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
           <DialogTitle>QR-код ученика</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Student Info */}
-          <Card>
+          <Card className="border-0 shadow-sm">
             <CardContent className="pt-4">
               <div className="text-center space-y-2">
                 <h3 className="font-semibold text-lg">{student.name}</h3>
-                <div className="flex justify-center gap-2">
-                  <Badge variant="secondary">{student.class}</Badge>
-                  <Badge variant="outline">ID: {student.qrCode}</Badge>
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <Badge variant="secondary">{student.group}</Badge>
+                  <Badge variant="outline">Курс: {student.course}</Badge>
+                  <Badge variant="outline">ID: {student.qrCode || "Не задан"}</Badge>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* QR Code */}
           <div className="flex justify-center">
             <div className="p-4 bg-white rounded-lg border-2 border-primary/20">
-              <img src={qrCodeURL || "/placeholder.svg"} alt={`QR-код для ${student.name}`} className="w-64 h-64" />
+              {error ? (
+                <p className="w-64 h-64 flex items-center justify-center text-red-500 text-center">{error}</p>
+              ) : (
+                <canvas ref={canvasRef} className="w-64 h-64" />
+              )}
             </div>
           </div>
 
-          {/* Instructions */}
           <div className="text-center text-sm text-muted-foreground">
             <p>Отсканируйте этот QR-код для отметки посещения ученика</p>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-2">
-            <Button onClick={handlePrint} className="flex-1">
+            <Button onClick={handlePrint} className="flex-1" disabled={!qrCodeURL}>
               <Print className="h-4 w-4 mr-2" />
               Печать
             </Button>
-            <Button onClick={handleDownload} variant="outline" className="flex-1 bg-transparent">
+            <Button onClick={handleDownload} variant="outline" className="flex-1 bg-transparent" disabled={!qrCodeURL}>
               <Download className="h-4 w-4 mr-2" />
               Скачать
             </Button>
@@ -141,5 +185,5 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

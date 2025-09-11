@@ -13,7 +13,12 @@ export const getAllStudents = async (): Promise<Student[]> => {
   }
 
   return data.map((student) => ({
-    ...student,
+    id: student.id,
+    name: student.name,
+    group: student.group,
+    course: student.course,
+    specialty: student.specialty,
+    qrCode: student.qr_code,
     createdAt: new Date(student.created_at),
   }))
 }
@@ -27,7 +32,12 @@ export const getStudentById = async (id: string): Promise<Student | null> => {
   }
 
   return {
-    ...data,
+    id: data.id,
+    name: data.name,
+    group: data.group,
+    course: data.course,
+    specialty: data.specialty,
+    qrCode: data.qr_code,
     createdAt: new Date(data.created_at),
   }
 }
@@ -41,7 +51,11 @@ export const getStudentByQRCode = async (qrCode: string): Promise<Student | null
   }
 
   return {
-    ...data,
+    id: data.id,
+    name: data.name,
+    group: data.group,
+    course: data.course,
+    specialty: data.specialty,
     qrCode: data.qr_code,
     createdAt: new Date(data.created_at),
   }
@@ -66,13 +80,17 @@ export const addStudent = async (student: Omit<Student, "id" | "createdAt">): Pr
   }
 
   return {
-    ...data,
+    id: data.id,
+    name: data.name,
+    group: data.group,
+    course: data.course,
+    specialty: data.specialty,
     qrCode: data.qr_code,
     createdAt: new Date(data.created_at),
   }
 }
 
-export const updateStudent = async (id: string, updates: Partial<Student>): Promise<Student | null> => {
+export const updateStudent = async (id: string, updates: Partial<Omit<Student, "id" | "createdAt">>): Promise<Student | null> => {
   const updateData: any = {}
   if (updates.name) updateData.name = updates.name
   if (updates.group) updateData.group = updates.group
@@ -88,7 +106,11 @@ export const updateStudent = async (id: string, updates: Partial<Student>): Prom
   }
 
   return {
-    ...data,
+    id: data.id,
+    name: data.name,
+    group: data.group,
+    course: data.course,
+    specialty: data.specialty,
     qrCode: data.qr_code,
     createdAt: new Date(data.created_at),
   }
@@ -111,7 +133,7 @@ export const getAllAttendanceRecords = async (): Promise<AttendanceRecord[]> => 
     .from("attendance_records")
     .select(`
       *,
-      students (name, group, course)
+      student:student_id (name)
     `)
     .order("timestamp", { ascending: false })
 
@@ -123,9 +145,10 @@ export const getAllAttendanceRecords = async (): Promise<AttendanceRecord[]> => 
   return data.map((record) => ({
     id: record.id,
     studentId: record.student_id,
-    studentName: record.students.name,
+    studentName: record.student.name,
     eventName: record.event_name,
     timestamp: new Date(record.timestamp),
+    scannedBy: record.scanned_by,
   }))
 }
 
@@ -136,10 +159,11 @@ export const addAttendanceRecord = async (record: Omit<AttendanceRecord, "id">):
       student_id: record.studentId,
       event_name: record.eventName,
       timestamp: record.timestamp.toISOString(),
+      scanned_by: record.scannedBy,
     })
     .select(`
       *,
-      students (name)
+      student:student_id (name)
     `)
     .single()
 
@@ -151,9 +175,10 @@ export const addAttendanceRecord = async (record: Omit<AttendanceRecord, "id">):
   return {
     id: data.id,
     studentId: data.student_id,
-    studentName: data.students.name,
+    studentName: data.student.name,
     eventName: data.event_name,
     timestamp: new Date(data.timestamp),
+    scannedBy: data.scanned_by,
   }
 }
 
@@ -162,7 +187,7 @@ export const getAttendanceByEvent = async (eventName: string): Promise<Attendanc
     .from("attendance_records")
     .select(`
       *,
-      students (name, group, course)
+      student:student_id (name, group, course)
     `)
     .eq("event_name", eventName)
     .order("timestamp", { ascending: false })
@@ -175,9 +200,10 @@ export const getAttendanceByEvent = async (eventName: string): Promise<Attendanc
   return data.map((record) => ({
     id: record.id,
     studentId: record.student_id,
-    studentName: record.students.name,
+    studentName: record.student.name,
     eventName: record.event_name,
     timestamp: new Date(record.timestamp),
+    scannedBy: record.scanned_by,
   }))
 }
 
@@ -196,9 +222,10 @@ export const getAttendanceByStudent = async (studentId: string): Promise<Attenda
   return data.map((record) => ({
     id: record.id,
     studentId: record.student_id,
-    studentName: "", // Will be filled by join query if needed
+    studentName: "", // Fill if needed
     eventName: record.event_name,
     timestamp: new Date(record.timestamp),
+    scannedBy: record.scanned_by,
   }))
 }
 
@@ -212,8 +239,10 @@ export const getAllEvents = async (): Promise<Event[]> => {
   }
 
   return data.map((event) => ({
-    ...event,
+    id: event.id,
+    name: event.name,
     date: new Date(event.date),
+    description: event.description,
     isActive: event.is_active,
   }))
 }
@@ -226,9 +255,13 @@ export const getActiveEvent = async (): Promise<Event | null> => {
     return null
   }
 
+  if (!data) return null
+
   return {
-    ...data,
+    id: data.id,
+    name: data.name,
     date: new Date(data.date),
+    description: data.description,
     isActive: data.is_active,
   }
 }
@@ -251,14 +284,16 @@ export const addEvent = async (event: Omit<Event, "id">): Promise<Event | null> 
   }
 
   return {
-    ...data,
+    id: data.id,
+    name: data.name,
     date: new Date(data.date),
+    description: data.description,
     isActive: data.is_active,
   }
 }
 
 export const setActiveEvent = async (eventId: string): Promise<boolean> => {
-  // First deactivate all events
+  // Deactivate all
   const { error: deactivateError } = await supabase.from("events").update({ is_active: false }).neq("id", "")
 
   if (deactivateError) {
@@ -266,7 +301,7 @@ export const setActiveEvent = async (eventId: string): Promise<boolean> => {
     return false
   }
 
-  // Then activate the selected event
+  // Activate selected
   const { error: activateError } = await supabase.from("events").update({ is_active: true }).eq("id", eventId)
 
   if (activateError) {

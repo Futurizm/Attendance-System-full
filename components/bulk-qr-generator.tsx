@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Printer as Print, QrCode } from "lucide-react"
-import { generateQRCodeData, generateQRCodeURL } from "@/lib/qr-utils"
+import QRCode from "qrcode"
 import type { Student } from "@/lib/types"
 
 interface BulkQRGeneratorProps {
@@ -16,6 +16,28 @@ interface BulkQRGeneratorProps {
 export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [selectedStudents, setSelectedStudents] = useState<string[]>([])
+  const [qrCodeURLs, setQRCodeURLs] = useState<Record<string, string>>({})
+
+  // Генерируем QR-коды заранее для всех студентов
+  useEffect(() => {
+    const generateQRCodeURLs = async () => {
+      const urls: Record<string, string> = {}
+      for (const student of students) {
+        if (student.qrCode) {
+          try {
+            const url = await QRCode.toDataURL(student.qrCode, { scale: 6, margin: 2 })
+            urls[student.id] = url
+            console.log(`Generated QR for ${student.name}:`, student.qrCode) // Для дебага
+          } catch (error) {
+            console.error(`Error generating QR for ${student.name}:`, error)
+          }
+        }
+      }
+      setQRCodeURLs(urls)
+    }
+
+    generateQRCodeURLs()
+  }, [students])
 
   const handleSelectAll = () => {
     if (selectedStudents.length === students.length) {
@@ -38,14 +60,17 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
     if (printWindow) {
       const qrCodesHTML = selectedStudentData
         .map((student) => {
-          const qrData = generateQRCodeData(student.id, student.name)
-          const qrCodeURL = generateQRCodeURL(qrData, 200)
+          const qrCodeURL = qrCodeURLs[student.id] || ""
+          if (!qrCodeURL) return "" // Пропускаем, если QR не сгенерирован
 
           return `
           <div class="qr-card">
             <div class="student-info">
               <h3>${student.name}</h3>
-              <p>Класс: ${student.class} | ID: ${student.qrCode}</p>
+              <p>Группа: ${student.group}</p>
+              <p>Курс: ${student.course}</p>
+              <p>Специальность: ${student.specialty}</p>
+              <p>ID: ${student.qrCode}</p>
             </div>
             <div class="qr-code">
               <img src="${qrCodeURL}" alt="QR-код для ${student.name}" />
@@ -53,6 +78,7 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
           </div>
         `
         })
+        .filter(Boolean) // Убираем пустые
         .join("")
 
       printWindow.document.write(`
@@ -82,7 +108,7 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
                 color: #1E3A8A;
               }
               .student-info p {
-                margin: 0 0 15px 0;
+                margin: 0 0 5px 0;
                 font-size: 12px;
                 color: #666;
               }
@@ -128,7 +154,7 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
           <div className="flex items-center space-x-2 pb-4 border-b">
             <Checkbox
               id="select-all"
-              checked={selectedStudents.length === students.length}
+              checked={selectedStudents.length === students.length && students.length > 0}
               onCheckedChange={handleSelectAll}
             />
             <label htmlFor="select-all" className="text-sm font-medium">
@@ -149,7 +175,7 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{student.name}</span>
                     <Badge variant="secondary" className="text-xs">
-                      {student.class}
+                      {student.group}
                     </Badge>
                   </div>
                 </div>

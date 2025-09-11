@@ -1,263 +1,195 @@
-"use client"
+"use client";
 
-import { useState, useRef, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Camera, CameraOff, CheckCircle, XCircle, RotateCcw } from "lucide-react"
-import { parseQRCodeData } from "@/lib/qr-utils"
-import { getStudentByQRCode, addAttendanceRecord, getActiveEvent } from "@/lib/database"
+import QrScanner from "qr-scanner";
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { RotateCcw, Flashlight, FlashlightOff } from "lucide-react";
+import { addAttendanceRecord, getActiveEvent, getStudentByQRCode } from "@/lib/database-supabase";
+import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CheckCircle, XCircle } from "lucide-react";
 
-interface ScanResult {
-  success: boolean
-  studentName?: string
-  message: string
-  timestamp: Date
+interface QRScannerProps {
+  onScanSuccess?: () => void;
 }
 
-export function QRScanner() {
-  const [isScanning, setIsScanning] = useState(false)
-  const [scanResult, setScanResult] = useState<ScanResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null)
+export function QRScanner({ onScanSuccess }: QRScannerProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [scanner, setScanner] = useState<QrScanner | null>(null);
+  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
+  const [hasFlash, setHasFlash] = useState(false);
+  const [flashOn, setFlashOn] = useState(false);
+  const [scanning, setScanning] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<{
+    success: boolean;
+    message: string;
+    studentName?: string;
+    timestamp: Date;
+  } | null>(null);
 
-  const startScanning = async () => {
-    try {
-      setError(null)
-      setScanResult(null)
+  const startScanner = async () => {
+    if (videoRef.current && !scanner) {
+      try {
+        setError(null);
+        console.log("Starting QR scanner with facingMode:", facingMode); // Debug log
+        const qrScanner = new QrScanner(
+          videoRef.current,
+          async (result) => {
+            if (!scanning) return;
 
-      // Request camera access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }, // Use back camera if available
-      })
+            // Stop scanner to prevent multiple scans
+            qrScanner.stop();
+            setScanning(false);
+            setScanner(null);
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        streamRef.current = stream
-        setIsScanning(true)
+            console.log("Scanned QR code:", result.data); // Debug log
+            try {
+              const student = await getStudentByQRCode(result.data);
+              if (!student) {
+                setScanResult({
+                  success: false,
+                  message: "Студент не найден",
+                  timestamp: new Date(),
+                });
+                toast.error("Студент не найден");
+                return;
+              }
 
-        // Start scanning for QR codes
-        scanIntervalRef.current = setInterval(() => {
-          scanQRCode()
-        }, 500) // Scan every 500ms
+              const activeEvent = await getActiveEvent();
+              if (!activeEvent) {
+                setScanResult({
+                  success: false,
+                  message: "Нет активного мероприятия",
+                  timestamp: new Date(),
+                });
+                toast.error("Нет активного мероприятия");
+                return;
+              }
+
+              console.log("Adding attendance for student:", student.id, "Event:", activeEvent.name); // Debug log
+              const attendanceRecord = await addAttendanceRecord({
+                studentId: student.id,
+                studentName: student.name,
+                eventName: activeEvent.name,
+                timestamp: new Date(),
+                scannedBy: "scanner",
+              });
+
+              if (attendanceRecord) {
+                setScanResult({
+                  success: true,
+                  studentName: student.name,
+                  message: `Посещение отмечено для ${student.name}`,
+                  timestamp: new Date(),
+                });
+                toast.success(`Посещение отмечено для ${student.name}`);
+                onScanSuccess?.();
+              } else {
+                setScanResult({
+                  success: false,
+                  message: "Ошибка при отметке посещения (возможно, посещение уже отмечено)",
+                  timestamp: new Date(),
+                });
+                toast.error("Ошибка при отметке посещения");
+              }
+            } catch (error: any) {
+              console.error("QR scan error:", error);
+              const message = error.message.includes("unique_student_event")
+                ? "Посещение для этого студента уже отмечено"
+                : "Ошибка при обработке QR-кода";
+              setScanResult({
+                success: false,
+                message,
+                timestamp: new Date(),
+              });
+              toast.error(message);
+            }
+          },
+          {
+            returnDetailedScanResult: true,
+            preferredCamera: facingMode,
+            highlightScanRegion: true,
+            highlightCodeOutline: true,
+          }
+        );
+
+        await qrScanner.start();
+        setScanner(qrScanner);
+        console.log("Scanner started successfully"); // Debug log
+        const flashAvailable = await qrScanner.hasFlash();
+        setHasFlash(flashAvailable);
+      } catch (err) {
+        setError("Не удалось получить доступ к камере. Проверьте разрешения.");
+        console.error("Camera access error:", err);
       }
-    } catch (err) {
-      setError("Не удалось получить доступ к камере. Проверьте разрешения.")
-      console.error("Camera access error:", err)
     }
-  }
-
-  const stopScanning = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current)
-      scanIntervalRef.current = null
-    }
-
-    setIsScanning(false)
-  }
-
-  const scanQRCode = () => {
-    if (!videoRef.current || !canvasRef.current) return
-
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    const context = canvas.getContext("2d")
-
-    if (!context || video.readyState !== video.HAVE_ENOUGH_DATA) return
-
-    // Set canvas size to match video
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-
-    // Draw video frame to canvas
-    context.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-    // Get image data for QR code detection
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
-
-    // Simple QR code detection simulation
-    // In a real implementation, you would use a library like jsQR
-    // For now, we'll simulate QR code detection with a manual input
-    detectQRCodeFromImageData(imageData)
-  }
-
-  const detectQRCodeFromImageData = (imageData: ImageData) => {
-    // This is a placeholder for actual QR code detection
-    // In a real implementation, you would use a library like jsQR
-    // For demonstration, we'll use a simulated detection
-
-    // Simulate QR code detection with a random chance
-    if (Math.random() < 0.1) {
-      // 10% chance to simulate detection
-      // Simulate detecting a student QR code
-      const students = ["STU001", "STU002", "STU003", "STU004", "STU005"]
-      const randomQR = students[Math.floor(Math.random() * students.length)]
-      processQRCode(randomQR)
-    }
-  }
-
-  const processQRCode = (qrData: string) => {
-    try {
-      // Try to parse as JSON first (our format)
-      const parsedData = parseQRCodeData(qrData)
-
-      if (parsedData) {
-        handleStudentScan(parsedData.studentId, parsedData.studentName)
-      } else {
-        // Try to find student by QR code directly
-        const student = getStudentByQRCode(qrData)
-        if (student) {
-          handleStudentScan(student.id, student.name)
-        } else {
-          setScanResult({
-            success: false,
-            message: "QR-код не распознан или ученик не найден",
-            timestamp: new Date(),
-          })
-        }
-      }
-    } catch (err) {
-      setScanResult({
-        success: false,
-        message: "Ошибка при обработке QR-кода",
-        timestamp: new Date(),
-      })
-    }
-
-    // Stop scanning after successful detection
-    stopScanning()
-  }
-
-  const handleStudentScan = (studentId: string, studentName: string) => {
-    const activeEvent = getActiveEvent()
-
-    if (!activeEvent) {
-      setScanResult({
-        success: false,
-        message: "Нет активного мероприятия для отметки посещения",
-        timestamp: new Date(),
-      })
-      return
-    }
-
-    // Add attendance record
-    const attendanceRecord = addAttendanceRecord({
-      studentId,
-      studentName,
-      eventName: activeEvent.name,
-      timestamp: new Date(),
-      scannedBy: "Преподаватель", // In a real app, this would be the logged-in user
-    })
-
-    setScanResult({
-      success: true,
-      studentName,
-      message: `Посещение отмечено для мероприятия "${activeEvent.name}"`,
-      timestamp: attendanceRecord.timestamp,
-    })
-  }
-
-  const resetScanner = () => {
-    setScanResult(null)
-    setError(null)
-  }
+  };
 
   useEffect(() => {
-    return () => {
-      stopScanning()
+    if (scanning) {
+      startScanner();
     }
-  }, [])
+
+    return () => {
+      scanner?.destroy();
+      setScanner(null);
+      console.log("Scanner destroyed"); // Debug log
+    };
+  }, [scanning, facingMode]);
+
+  const toggleCamera = async () => {
+    if (scanner) {
+      const newMode = facingMode === "environment" ? "user" : "environment";
+      setFacingMode(newMode);
+      scanner.destroy();
+      setScanner(null);
+      await startScanner();
+    }
+  };
+
+  const toggleFlash = async () => {
+    if (scanner) {
+      if (flashOn) {
+        await scanner.turnFlashOff();
+        setFlashOn(false);
+      } else {
+        await scanner.turnFlashOn();
+        setFlashOn(true);
+      }
+    }
+  };
+
+  const resetScanner = () => {
+    setScanResult(null);
+    setError(null);
+    setScanning(true);
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Scanner Controls */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Camera className="h-5 w-5" />
-            QR-сканер посещаемости
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!isScanning ? (
-            <Button onClick={startScanning} className="w-full" size="lg">
-              <Camera className="h-4 w-4 mr-2" />
-              Начать сканирование
-            </Button>
-          ) : (
-            <Button onClick={stopScanning} variant="destructive" className="w-full" size="lg">
-              <CameraOff className="h-4 w-4 mr-2" />
-              Остановить сканирование
+    <div className="space-y-4">
+      <div className="relative">
+        <video ref={videoRef} className="w-full rounded-lg" autoPlay playsInline muted />
+        {scanning && (
+          <div className="absolute inset-0 border-2 border-primary rounded-lg pointer-events-none">
+            <div className="absolute top-4 left-4 w-8 h-8 border-l-4 border-t-4 border-primary"></div>
+            <div className="absolute top-4 right-4 w-8 h-8 border-r-4 border-t-4 border-primary"></div>
+            <div className="absolute bottom-4 left-4 w-8 h-8 border-l-4 border-b-4 border-primary"></div>
+            <div className="absolute bottom-4 right-4 w-8 h-8 border-r-4 border-b-4 border-primary"></div>
+          </div>
+        )}
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+          <Button variant="secondary" size="icon" onClick={toggleCamera}>
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+          {hasFlash && (
+            <Button variant="secondary" size="icon" onClick={toggleFlash}>
+              {flashOn ? <FlashlightOff className="h-4 w-4" /> : <Flashlight className="h-4 w-4" />}
             </Button>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Camera View */}
-      {isScanning && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="relative">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-64 bg-black rounded-lg object-cover"
-              />
-              <canvas ref={canvasRef} className="hidden" />
-
-              {/* Scanning overlay */}
-              <div className="absolute inset-0 border-2 border-primary rounded-lg pointer-events-none">
-                <div className="absolute top-4 left-4 w-8 h-8 border-l-4 border-t-4 border-primary"></div>
-                <div className="absolute top-4 right-4 w-8 h-8 border-r-4 border-t-4 border-primary"></div>
-                <div className="absolute bottom-4 left-4 w-8 h-8 border-l-4 border-b-4 border-primary"></div>
-                <div className="absolute bottom-4 right-4 w-8 h-8 border-r-4 border-b-4 border-primary"></div>
-              </div>
-
-              <div className="absolute bottom-2 left-2 right-2 text-center">
-                <Badge variant="secondary" className="bg-black/50 text-white">
-                  Наведите камеру на QR-код
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Manual QR Input for Testing */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Тестирование (для демонстрации)</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" size="sm" onClick={() => processQRCode("STU001")} className="text-xs">
-              Тест: Иван Петров
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => processQRCode("STU002")} className="text-xs">
-              Тест: Мария Сидорова
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => processQRCode("STU003")} className="text-xs">
-              Тест: Алексей Иванов
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => processQRCode("INVALID")} className="text-xs">
-              Тест: Неверный QR
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Error Display */}
       {error && (
         <Alert variant="destructive">
           <XCircle className="h-4 w-4" />
@@ -265,7 +197,6 @@ export function QRScanner() {
         </Alert>
       )}
 
-      {/* Scan Result */}
       {scanResult && (
         <Alert variant={scanResult.success ? "default" : "destructive"}>
           {scanResult.success ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4" />}
@@ -281,13 +212,12 @@ export function QRScanner() {
         </Alert>
       )}
 
-      {/* Reset Button */}
-      {(scanResult || error) && (
+      {(error || scanResult) && (
         <Button onClick={resetScanner} variant="outline" className="w-full bg-transparent">
           <RotateCcw className="h-4 w-4 mr-2" />
           Сканировать еще
         </Button>
       )}
     </div>
-  )
+  );
 }

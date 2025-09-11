@@ -1,16 +1,49 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { QRScanner } from "@/components/qr-scanner"
-import { getActiveEvent, getAllAttendanceRecords } from "@/lib/database"
-import { Calendar, Users, Clock } from "lucide-react"
-import Link from "next/link"
+// app/scanner/page.tsx
+"use client";
+
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Calendar, Users, Clock } from "lucide-react";
+import Link from "next/link";
+import { QRScanner } from "@/components/qr-scanner";
+import { getActiveEvent, getAllAttendanceRecords } from "@/lib/database-supabase";
+import type { Event, AttendanceRecord } from "@/lib/types";
 
 export default function ScannerPage() {
-  const activeEvent = getActiveEvent()
-  const todayAttendance = getAllAttendanceRecords().filter(
-    (record) => record.timestamp.toDateString() === new Date().toDateString(),
-  )
+  const [activeEvent, setActiveEvent] = useState<Event | null>(null);
+  const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    try {
+      const event = await getActiveEvent();
+      setActiveEvent(event);
+
+      const records = await getAllAttendanceRecords();
+      const today = records.filter(
+        (record) => record.timestamp.toDateString() === new Date().toDateString()
+      );
+      setTodayAttendance(today);
+    } catch (error) {
+      console.error("Error loading data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleScanSuccess = () => {
+    loadData(); // Refresh attendance records after a successful scan
+  };
+
+  if (loading) {
+    return <div className="min-h-screen bg-background flex items-center justify-center">Загрузка...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -60,7 +93,7 @@ export default function ScannerPage() {
         </Card>
 
         {/* QR Scanner */}
-        {activeEvent && <QRScanner />}
+        {activeEvent && <QRScanner onScanSuccess={handleScanSuccess} />}
 
         {/* Today's Attendance */}
         {todayAttendance.length > 0 && (
@@ -107,5 +140,5 @@ export default function ScannerPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
