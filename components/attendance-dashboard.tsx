@@ -1,9 +1,11 @@
-"use client"
+// components/attendance-dashboard.tsx
+"use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Progress } from "@/components/ui/progress"
+import { useMemo, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import {
   BarChart,
   Bar,
@@ -17,120 +19,190 @@ import {
   Cell,
   LineChart,
   Line,
-} from "recharts"
-import { TrendingUp, Users, Calendar, Clock, BarChart3 } from "lucide-react"
-import { getAllAttendanceRecords, getAllStudents, getAllEvents } from "@/lib/database"
-import { useState, useMemo } from "react"
+} from "recharts";
+import { TrendingUp, Users, Calendar, Clock, BarChart3 } from "lucide-react";
+import type { AttendanceRecord, Student, Event } from "@/lib/types";
 
 interface AttendanceStats {
-  totalStudents: number
-  totalEvents: number
-  totalAttendance: number
-  todayAttendance: number
-  attendanceRate: number
-  topEvent: string
-  topStudent: string
+  totalStudents: number;
+  totalEvents: number;
+  totalAttendance: number;
+  todayAttendance: number;
+  attendanceRate: number;
+  topEvent: string;
+  topStudent: string;
 }
 
 interface ChartData {
-  name: string
-  value: number
-  percentage?: number
+  name: string;
+  value: number;
+  percentage?: number;
 }
 
-export function AttendanceDashboard() {
-  const [selectedPeriod, setSelectedPeriod] = useState("all")
-  const [selectedClass, setSelectedClass] = useState("all")
+interface AttendanceDashboardProps {
+  attendanceRecords: AttendanceRecord[];
+  students: Student[];
+  events: Event[];
+}
 
-  const attendanceRecords = getAllAttendanceRecords()
-  const students = getAllStudents()
-  const events = getAllEvents()
+export function AttendanceDashboard({ attendanceRecords, students, events }: AttendanceDashboardProps) {
+  const [selectedPeriod, setSelectedPeriod] = useState("all");
+  const [selectedClass, setSelectedClass] = useState("all");
 
   // Calculate statistics
   const stats: AttendanceStats = useMemo(() => {
-    const today = new Date().toDateString()
-    const todayRecords = attendanceRecords.filter((record) => record.timestamp.toDateString() === today)
+    const today = new Date().toDateString();
+    let filteredRecords = attendanceRecords;
+    let filteredStudents = students;
 
-    // Calculate attendance by event
+    // Filter by period
+    if (selectedPeriod === "today") {
+      filteredRecords = attendanceRecords.filter((record) => record.timestamp.toDateString() === today);
+    } else if (selectedPeriod === "week") {
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      filteredRecords = attendanceRecords.filter(
+        (record) => record.timestamp >= oneWeekAgo,
+      );
+    } else if (selectedPeriod === "month") {
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      filteredRecords = attendanceRecords.filter(
+        (record) => record.timestamp >= oneMonthAgo,
+      );
+    }
+
+    // Filter by class
+    if (selectedClass !== "all") {
+      filteredStudents = students.filter((student) => student.group === selectedClass);
+      filteredRecords = filteredRecords.filter((record) =>
+        filteredStudents.some((student) => student.id === record.studentId),
+      );
+    }
+
+    const todayRecords = filteredRecords.filter((record) => record.timestamp.toDateString() === today);
+
     const eventAttendance = events.map((event) => ({
       event: event.name,
-      count: attendanceRecords.filter((record) => record.eventName === event.name).length,
-    }))
+      count: filteredRecords.filter((record) => record.eventName === event.name).length,
+    }));
 
-    // Calculate attendance by student
-    const studentAttendance = students.map((student) => ({
+    const studentAttendance = filteredStudents.map((student) => ({
       student: student.name,
-      count: attendanceRecords.filter((record) => record.studentId === student.id).length,
-    }))
+      count: filteredRecords.filter((record) => record.studentId === student.id).length,
+    }));
 
-    const topEvent = eventAttendance.reduce((max, current) => (current.count > max.count ? current : max), {
-      event: "Нет данных",
-      count: 0,
-    })
+    const topEvent = eventAttendance.reduce(
+      (max, current) => (current.count > max.count ? current : max),
+      { event: "Нет данных", count: 0 },
+    );
 
-    const topStudent = studentAttendance.reduce((max, current) => (current.count > max.count ? current : max), {
-      student: "Нет данных",
-      count: 0,
-    })
+    const topStudent = studentAttendance.reduce(
+      (max, current) => (current.count > max.count ? current : max),
+      { student: "Нет данных", count: 0 },
+    );
 
     const attendanceRate =
-      students.length > 0 ? (attendanceRecords.length / (students.length * events.length)) * 100 : 0
+      filteredStudents.length > 0
+        ? (filteredRecords.length / (filteredStudents.length * events.length)) * 100
+        : 0;
 
     return {
-      totalStudents: students.length,
+      totalStudents: filteredStudents.length,
       totalEvents: events.length,
-      totalAttendance: attendanceRecords.length,
+      totalAttendance: filteredRecords.length,
       todayAttendance: todayRecords.length,
       attendanceRate: Math.round(attendanceRate),
       topEvent: topEvent.event,
       topStudent: topStudent.student,
-    }
-  }, [attendanceRecords, students, events])
+    };
+  }, [attendanceRecords, students, events, selectedPeriod, selectedClass]);
 
   // Prepare chart data
   const eventChartData: ChartData[] = useMemo(() => {
+    let filteredRecords = attendanceRecords;
+    if (selectedPeriod === "today") {
+      filteredRecords = attendanceRecords.filter(
+        (record) => record.timestamp.toDateString() === new Date().toDateString(),
+      );
+    } else if (selectedPeriod === "week") {
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      filteredRecords = attendanceRecords.filter(
+        (record) => record.timestamp >= oneWeekAgo,
+      );
+    } else if (selectedPeriod === "month") {
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      filteredRecords = attendanceRecords.filter(
+        (record) => record.timestamp >= oneMonthAgo,
+      );
+    }
+
+    if (selectedClass !== "all") {
+      const filteredStudents = students.filter((student) => student.group === selectedClass);
+      filteredRecords = filteredRecords.filter((record) =>
+        filteredStudents.some((student) => student.id === record.studentId),
+      );
+    }
+
     return events.map((event) => {
-      const count = attendanceRecords.filter((record) => record.eventName === event.name).length
+      const count = filteredRecords.filter((record) => record.eventName === event.name).length;
       return {
         name: event.name.length > 15 ? event.name.substring(0, 15) + "..." : event.name,
         value: count,
         percentage: stats.totalAttendance > 0 ? Math.round((count / stats.totalAttendance) * 100) : 0,
-      }
-    })
-  }, [events, attendanceRecords, stats.totalAttendance])
+      };
+    });
+  }, [events, attendanceRecords, stats.totalAttendance, selectedPeriod, selectedClass]);
 
   const classChartData: ChartData[] = useMemo(() => {
-    const classGroups = students.reduce(
+    let filteredStudents = students;
+    if (selectedClass !== "all") {
+      filteredStudents = students.filter((student) => student.group === selectedClass);
+    }
+
+    const classGroups = filteredStudents.reduce(
       (acc, student) => {
-        acc[student.class] = (acc[student.class] || 0) + 1
-        return acc
+        acc[student.group] = (acc[student.group] || 0) + 1;
+        return acc;
       },
       {} as Record<string, number>,
-    )
+    );
 
     return Object.entries(classGroups).map(([className, count]) => ({
       name: className,
       value: count,
-    }))
-  }, [students])
+    }));
+  }, [students, selectedClass]);
 
   const attendanceByDayData: ChartData[] = useMemo(() => {
+    let filteredRecords = attendanceRecords;
+    if (selectedClass !== "all") {
+      const filteredStudents = students.filter((student) => student.group === selectedClass);
+      filteredRecords = attendanceRecords.filter((record) =>
+        filteredStudents.some((student) => student.id === record.studentId),
+      );
+    }
+
     const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const date = new Date()
-      date.setDate(date.getDate() - i)
-      return date
-    }).reverse()
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      return date;
+    }).reverse();
 
     return last7Days.map((date) => {
-      const dayRecords = attendanceRecords.filter((record) => record.timestamp.toDateString() === date.toDateString())
+      const dayRecords = filteredRecords.filter(
+        (record) => record.timestamp.toDateString() === date.toDateString(),
+      );
       return {
         name: date.toLocaleDateString("ru-RU", { weekday: "short", day: "numeric" }),
         value: dayRecords.length,
-      }
-    })
-  }, [attendanceRecords])
+      };
+    });
+  }, [attendanceRecords, students, selectedClass]);
 
-  const COLORS = ["#1E3A8A", "#3B82F6", "#60A5FA", "#93C5FD", "#DBEAFE"]
+  const COLORS = ["#1E3A8A", "#3B82F6", "#60A5FA", "#93C5FD", "#DBEAFE"];
 
   return (
     <div className="space-y-6">
@@ -321,7 +393,7 @@ export function AttendanceDashboard() {
                       <Badge variant={index === 0 ? "default" : "secondary"}>{index + 1}</Badge>
                       <div>
                         <div className="font-medium">{student.name}</div>
-                        <div className="text-sm text-muted-foreground">{student.class}</div>
+                        <div className="text-sm text-muted-foreground">{student.group}</div>
                       </div>
                     </div>
                     <div className="text-right">
@@ -370,5 +442,5 @@ export function AttendanceDashboard() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

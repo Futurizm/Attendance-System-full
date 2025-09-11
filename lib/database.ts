@@ -1,15 +1,29 @@
-import { createBrowserSupabaseClient } from "./supabase-client";
+"use server";
+
+import { createClient } from "@supabase/supabase-js";
 import type { Student, AttendanceRecord, Event } from "./types";
 
-const supabase = createBrowserSupabaseClient();
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error(
+    "Missing Supabase environment variables. Ensure SUPABASE_URL and SUPABASE_ANON_KEY are set in your .env file."
+  );
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Student management functions
 export const getAllStudents = async (): Promise<Student[]> => {
-  const { data, error } = await supabase.from("students").select("*").order("created_at", { ascending: false });
+  const { data, error } = await supabase
+    .from("students")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Error fetching students:", error)
-    return []
+    console.error("Error fetching students:", error);
+    return [];
   }
 
   return data.map((student) => ({
@@ -20,15 +34,15 @@ export const getAllStudents = async (): Promise<Student[]> => {
     specialty: student.specialty,
     qrCode: student.qr_code,
     createdAt: new Date(student.created_at),
-  }))
+  }));
 };
 
 export const getStudentById = async (id: string): Promise<Student | null> => {
   const { data, error } = await supabase.from("students").select("*").eq("id", id).single();
 
   if (error) {
-    console.error("Error fetching student:", error)
-    return null
+    console.error("Error fetching student:", error);
+    return null;
   }
 
   return {
@@ -39,15 +53,15 @@ export const getStudentById = async (id: string): Promise<Student | null> => {
     specialty: data.specialty,
     qrCode: data.qr_code,
     createdAt: new Date(data.created_at),
-  }
+  };
 };
 
 export const getStudentByQRCode = async (qrCode: string): Promise<Student | null> => {
   const { data, error } = await supabase.from("students").select("*").eq("qr_code", qrCode).single();
 
   if (error) {
-    console.error("Error fetching student by QR code:", error)
-    return null
+    console.error("Error fetching student by QR code:", error);
+    return null;
   }
 
   return {
@@ -58,7 +72,7 @@ export const getStudentByQRCode = async (qrCode: string): Promise<Student | null
     specialty: data.specialty,
     qrCode: data.qr_code,
     createdAt: new Date(data.created_at),
-  }
+  };
 };
 
 export const addStudent = async (student: Omit<Student, "id" | "createdAt">): Promise<Student | null> => {
@@ -75,8 +89,8 @@ export const addStudent = async (student: Omit<Student, "id" | "createdAt">): Pr
     .single();
 
   if (error) {
-    console.error("Error adding student:", error)
-    return null
+    console.error("Error adding student:", error);
+    return null;
   }
 
   return {
@@ -87,22 +101,22 @@ export const addStudent = async (student: Omit<Student, "id" | "createdAt">): Pr
     specialty: data.specialty,
     qrCode: data.qr_code,
     createdAt: new Date(data.created_at),
-  }
+  };
 };
 
 export const updateStudent = async (id: string, updates: Partial<Omit<Student, "id" | "createdAt">>): Promise<Student | null> => {
-  const updateData: any = {}
-  if (updates.name) updateData.name = updates.name
-  if (updates.group) updateData.group = updates.group
-  if (updates.course) updateData.course = updates.course
-  if (updates.specialty) updateData.specialty = updates.specialty
-  if (updates.qrCode) updateData.qr_code = updates.qrCode
+  const updateData: any = {};
+  if (updates.name) updateData.name = updates.name;
+  if (updates.group) updateData.group = updates.group;
+  if (updates.course) updateData.course = updates.course;
+  if (updates.specialty) updateData.specialty = updates.specialty;
+  if (updates.qrCode) updateData.qr_code = updates.qrCode;
 
   const { data, error } = await supabase.from("students").update(updateData).eq("id", id).select().single();
 
   if (error) {
-    console.error("Error updating student:", error)
-    return null
+    console.error("Error updating student:", error);
+    return null;
   }
 
   return {
@@ -113,18 +127,18 @@ export const updateStudent = async (id: string, updates: Partial<Omit<Student, "
     specialty: data.specialty,
     qrCode: data.qr_code,
     createdAt: new Date(data.created_at),
-  }
+  };
 };
 
 export const deleteStudent = async (id: string): Promise<boolean> => {
   const { error } = await supabase.from("students").delete().eq("id", id);
 
   if (error) {
-    console.error("Error deleting student:", error)
-    return false
+    console.error("Error deleting student:", error);
+    return false;
   }
 
-  return true
+  return true;
 };
 
 // Attendance management functions
@@ -138,8 +152,8 @@ export const getAllAttendanceRecords = async (): Promise<AttendanceRecord[]> => 
     .order("timestamp", { ascending: false });
 
   if (error) {
-    console.error("Error fetching attendance records:", error)
-    return []
+    console.error("Error fetching attendance records:", error);
+    return [];
   }
 
   return data.map((record) => ({
@@ -149,7 +163,7 @@ export const getAllAttendanceRecords = async (): Promise<AttendanceRecord[]> => 
     eventName: record.event_name,
     timestamp: new Date(record.timestamp),
     scannedBy: record.scanned_by,
-  }))
+  }));
 };
 
 export const addAttendanceRecord = async (record: Omit<AttendanceRecord, "id">): Promise<AttendanceRecord | null> => {
@@ -168,8 +182,8 @@ export const addAttendanceRecord = async (record: Omit<AttendanceRecord, "id">):
     .single();
 
   if (error) {
-    console.error("Error adding attendance record:", error)
-    return null
+    console.error("Error adding attendance record:", error);
+    return null;
   }
 
   return {
@@ -179,7 +193,7 @@ export const addAttendanceRecord = async (record: Omit<AttendanceRecord, "id">):
     eventName: data.event_name,
     timestamp: new Date(data.timestamp),
     scannedBy: data.scanned_by,
-  }
+  };
 };
 
 export const checkAttendanceExists = async (studentId: string, eventName: string): Promise<boolean> => {
@@ -191,11 +205,11 @@ export const checkAttendanceExists = async (studentId: string, eventName: string
     .limit(1);
 
   if (error) {
-    console.error("Error checking attendance:", error)
-    return false
+    console.error("Error checking attendance:", error);
+    return false;
   }
 
-  return data.length > 0
+  return data.length > 0;
 };
 
 export const getAttendanceByEvent = async (eventName: string): Promise<AttendanceRecord[]> => {
@@ -209,8 +223,8 @@ export const getAttendanceByEvent = async (eventName: string): Promise<Attendanc
     .order("timestamp", { ascending: false });
 
   if (error) {
-    console.error("Error fetching attendance by event:", error)
-    return []
+    console.error("Error fetching attendance by event:", error);
+    return [];
   }
 
   return data.map((record) => ({
@@ -220,7 +234,7 @@ export const getAttendanceByEvent = async (eventName: string): Promise<Attendanc
     eventName: record.event_name,
     timestamp: new Date(record.timestamp),
     scannedBy: record.scanned_by,
-  }))
+  }));
 };
 
 export const getAttendanceByStudent = async (studentId: string): Promise<AttendanceRecord[]> => {
@@ -231,8 +245,8 @@ export const getAttendanceByStudent = async (studentId: string): Promise<Attenda
     .order("timestamp", { ascending: false });
 
   if (error) {
-    console.error("Error fetching attendance by student:", error)
-    return []
+    console.error("Error fetching attendance by student:", error);
+    return [];
   }
 
   return data.map((record) => ({
@@ -242,7 +256,21 @@ export const getAttendanceByStudent = async (studentId: string): Promise<Attenda
     eventName: record.event_name,
     timestamp: new Date(record.timestamp),
     scannedBy: record.scanned_by,
-  }))
+  }));
+};
+
+export const deleteAttendanceRecord = async (recordId: string): Promise<boolean> => {
+  const { error } = await supabase
+    .from("attendance_records")
+    .delete()
+    .eq("id", recordId);
+
+  if (error) {
+    console.error("Error deleting attendance record:", error);
+    return false;
+  }
+
+  return true;
 };
 
 // Event management functions
@@ -250,8 +278,8 @@ export const getAllEvents = async (): Promise<Event[]> => {
   const { data, error } = await supabase.from("events").select("*").order("date", { ascending: false });
 
   if (error) {
-    console.error("Error fetching events:", error)
-    return []
+    console.error("Error fetching events:", error);
+    return [];
   }
 
   return data.map((event) => ({
@@ -260,22 +288,38 @@ export const getAllEvents = async (): Promise<Event[]> => {
     date: new Date(event.date),
     description: event.description,
     isActive: event.is_active,
-  }))
+  }));
+};
+
+export const getActiveEvent = async (): Promise<Event | null> => {
+  const { data, error } = await supabase.from("events").select("*").eq("is_active", true).single();
+
+  if (error) {
+    console.error("Error fetching active event:", error);
+    return null;
+  }
+
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    name: data.name,
+    date: new Date(data.date),
+    description: data.description,
+    isActive: data.is_active,
+  };
 };
 
 export const getActiveEvents = async (): Promise<Event[]> => {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0) // Start of today
   const { data, error } = await supabase
     .from("events")
     .select("*")
     .eq("is_active", true)
-    .gte("date", today.toISOString())
-    .order("date", { ascending: true });
+    .order("date", { ascending: false });
 
   if (error) {
-    console.error("Error fetching active events:", error)
-    return []
+    console.error("Error fetching active events:", error);
+    return [];
   }
 
   return data.map((event) => ({
@@ -284,7 +328,7 @@ export const getActiveEvents = async (): Promise<Event[]> => {
     date: new Date(event.date),
     description: event.description,
     isActive: event.is_active,
-  }))
+  }));
 };
 
 export const addEvent = async (event: Omit<Event, "id">): Promise<Event | null> => {
@@ -300,8 +344,8 @@ export const addEvent = async (event: Omit<Event, "id">): Promise<Event | null> 
     .single();
 
   if (error) {
-    console.error("Error adding event:", error)
-    return null
+    console.error("Error adding event:", error);
+    return null;
   }
 
   return {
@@ -310,16 +354,36 @@ export const addEvent = async (event: Omit<Event, "id">): Promise<Event | null> 
     date: new Date(data.date),
     description: data.description,
     isActive: data.is_active,
+  };
+};
+
+export const setActiveEvent = async (eventId: string): Promise<boolean> => {
+  // Deactivate all
+  const { error: deactivateError } = await supabase.from("events").update({ is_active: false }).neq("id", "");
+
+  if (deactivateError) {
+    console.error("Error deactivating events:", deactivateError);
+    return false;
   }
+
+  // Activate selected
+  const { error: activateError } = await supabase.from("events").update({ is_active: true }).eq("id", eventId);
+
+  if (activateError) {
+    console.error("Error activating event:", activateError);
+    return false;
+  }
+
+  return true;
 };
 
 export const toggleEventActive = async (eventId: string, isActive: boolean): Promise<boolean> => {
   const { error } = await supabase.from("events").update({ is_active: isActive }).eq("id", eventId);
 
   if (error) {
-    console.error("Error toggling event active status:", error)
-    return false
+    console.error(`Error ${isActive ? "activating" : "deactivating"} event:`, error);
+    return false;
   }
 
-  return true
+  return true;
 };

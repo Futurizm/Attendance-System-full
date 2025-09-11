@@ -1,24 +1,25 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Users, QrCode, Calendar, BarChart3, FileSpreadsheet, Settings } from "lucide-react"
-import { AttendanceDashboard } from "@/components/attendance-dashboard"
-import { getAllAttendanceRecords, getAllStudents, getAllEvents, getActiveEvent } from "@/lib/database"
-import Link from "next/link"
+// app/page.tsx
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Users, QrCode, Calendar, BarChart3, FileSpreadsheet, Settings } from "lucide-react";
+import { AttendanceDashboard } from "@/components/attendance-dashboard";
+import { getAllAttendanceRecords, getAllStudents, getAllEvents, getActiveEvent } from "@/lib/database";
+import Link from "next/link";
 
-export default function HomePage() {
-  const attendanceRecords = getAllAttendanceRecords()
-  const students = getAllStudents()
-  const events = getAllEvents()
-  const activeEvent = getActiveEvent()
+export default async function HomePage() {
+  const attendanceRecords = await getAllAttendanceRecords();
+  const students = await getAllStudents();
+  const events = await getAllEvents();
+  const activeEvent = await getActiveEvent();
 
   const todayAttendance = attendanceRecords.filter(
     (record) => record.timestamp.toDateString() === new Date().toDateString(),
-  )
+  );
 
   const attendanceRate =
     students.length > 0 && events.length > 0
       ? Math.round((attendanceRecords.length / (students.length * events.length)) * 100)
-      : 0
+      : 0;
 
   return (
     <div className="space-y-6">
@@ -198,8 +199,12 @@ export default function HomePage() {
 
       {/* Advanced Dashboard */}
       <div className="bg-white rounded-lg border p-6">
-        <AttendanceDashboard />
+        <AttendanceDashboard
+          attendanceRecords={attendanceRecords}
+          students={students}
+          events={events}
+        />
       </div>
     </div>
-  )
+  );
 }
