@@ -30,16 +30,16 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
       setError(null);
       const urls: Record<string, string> = {};
       for (const student of students) {
-        if (student.qrCode) {
+        if (student.qr_code) {
           try {
             const url = await new Promise<string>((resolve, reject) => {
-              QRCode.toDataURL(student.qrCode, { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
+              QRCode.toDataURL(student.qr_code, { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
                 if (err) reject(err);
                 else resolve(url);
               });
             });
             urls[student.id] = url;
-            console.log(`Generated QR for ${student.name}:`, student.qrCode);
+            console.log(`Generated QR for ${student.name}:`, student.qr_code);
           } catch (err) {
             console.error(`Error generating QR for ${student.name}:`, err);
             setError(`Ошибка генерации QR-кода для ${student.name}`);
@@ -113,7 +113,7 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
                 <p>Группа: ${student.group}</p>
                 <p>Курс: ${student.course}</p>
                 <p>Специальность: ${student.specialty}</p>
-                <p>ID: ${student.qrCode || "Не задан"}</p>
+                <p>ID: ${student.qr_code || "Не задан"}</p>
               </div>
               <div class="qr-code">
                 <img src="${qrCodeURL}" alt="QR-код для ${student.name}" />

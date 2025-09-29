@@ -33,6 +33,7 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
   } | null>(null);
   const [manualQrCode, setManualQrCode] = useState("");
   const [isManualInput, setIsManualInput] = useState(false);
+  const [lastScannedCode, setLastScannedCode] = useState<string | null>(null); // Prevent duplicate scans
 
   const startScanner = async () => {
     if (videoRef.current && !scanner) {
@@ -42,12 +43,13 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
         const qrScanner = new QrScanner(
           videoRef.current,
           async (result) => {
-            if (!scanning) return;
+            if (!scanning || result.data === lastScannedCode) return;
 
             // Stop scanner to prevent multiple scans
             qrScanner.stop();
             setScanning(false);
             setScanner(null);
+            setLastScannedCode(result.data);
 
             console.log("Scanned QR code:", result.data);
             await handleScan(result.data);
@@ -120,7 +122,9 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
         return;
       }
 
+      console.log("Fetched student:", student);
       const attendanceExists = await checkAttendanceExists(student.id, selectedEvent.name);
+      console.log("Attendance check result:", attendanceExists);
       if (attendanceExists) {
         setScanResult({
           success: false,
@@ -133,11 +137,11 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
       }
 
       const attendanceRecord = await addAttendanceRecord({
-        studentId: student.id,
+        student_id: student.id,
+        event_name: selectedEvent.name,
+        scanned_by: "scanner",
         studentName: student.name,
-        eventName: selectedEvent.name,
         timestamp: new Date(),
-        scannedBy: "scanner",
       });
 
       if (attendanceRecord) {
@@ -163,7 +167,7 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
       console.error("QR scan error:", error.name, error.message, error.stack);
       const message = error.message.includes("unique_student_event")
         ? `Посещение для этого студента уже отмечено для ${selectedEvent.name}`
-        : "Ошибка при обработке QR-кода";
+        : error.message || "Ошибка при обработке QR-кода";
       setScanResult({
         success: false,
         message,
@@ -211,6 +215,7 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
     setError(null);
     setIsManualInput(false);
     setScanning(true);
+    setLastScannedCode(null); // Reset to allow new scans
   };
 
   if (!selectedEvent) {

@@ -1,389 +1,232 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
 import type { Student, AttendanceRecord, Event } from "./types";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error(
-    "Missing Supabase environment variables. Ensure SUPABASE_URL and SUPABASE_ANON_KEY are set in your .env file."
-  );
+export async function getAllStudents() {
+  const res = await fetch(`${API_URL}/students`);
+  if (!res.ok) throw new Error('Error fetching students');
+  const students = await res.json();
+  return students.map((student: any) => ({
+    ...student,
+    id: student._id,
+    qrCode: student.qr_code,
+  }));
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Student management functions
-export const getAllStudents = async (): Promise<Student[]> => {
-  const { data, error } = await supabase
-    .from("students")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching students:", error);
-    return [];
-  }
-
-  return data.map((student) => ({
-    id: student.id,
-    name: student.name,
-    group: student.group,
-    course: student.course,
-    specialty: student.specialty,
+export async function getStudentById(id: string) {
+  const res = await fetch(`${API_URL}/students/${id}`);
+  if (!res.ok) return null;
+  const student = await res.json();
+  return {
+    ...student,
+    id: student._id,
     qrCode: student.qr_code,
-    createdAt: new Date(student.created_at),
+  };
+}
+
+export async function getStudentByQRCode(qrCode: string) {
+  const res = await fetch(`${API_URL}/students/qr/${qrCode}`);
+  if (!res.ok) return null;
+  const student = await res.json();
+  return {
+    ...student,
+    id: student._id,
+    qrCode: student.qr_code,
+  };
+}
+
+export async function addStudent(student: Omit<Student, "id" | "createdAt">) {
+  console.log('Sending student to backend:', student);
+  const res = await fetch(`${API_URL}/students`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...student, qr_code: student.qr_code }), 
+  });
+  if (!res.ok) {
+    const errorData = await res.json();
+    console.error('Backend error:', errorData);
+    return null;
+  }
+  const addedStudent = await res.json();
+  return {
+    ...addedStudent,
+    id: addedStudent._id,
+    qrCode: addedStudent.qr_code,
+  };
+}
+
+export async function updateStudent(id: string, updates: Partial<Omit<Student, "id" | "createdAt">>) {
+  const res = await fetch(`${API_URL}/students/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...updates, qr_code: updates.qr_code }), 
+  });
+  if (!res.ok) return null;
+  const updatedStudent = await res.json();
+  return {
+    ...updatedStudent,
+    id: updatedStudent._id,
+    qrCode: updatedStudent.qr_code,
+  };
+}
+
+export async function deleteStudent(id: string) {
+  const res = await fetch(`${API_URL}/students/${id}`, { method: 'DELETE' });
+  return res.ok;
+}
+
+export async function getAllAttendanceRecords() {
+  const res = await fetch(`${API_URL}/attendance`);
+  if (!res.ok) throw new Error('Error fetching attendance');
+  const records = await res.json();
+  return records.map((record: any) => ({
+    ...record,
+    id: record._id,
+    student_id: record.student_id,
+    event_name: record.event_name,
+    timestamp: new Date(record.timestamp), // Convert string to Date
+    scanned_by: record.scanned_by,
+    studentName: record.studentName,
   }));
-};
+}
 
-export const getStudentById = async (id: string): Promise<Student | null> => {
-  const { data, error } = await supabase.from("students").select("*").eq("id", id).single();
-
-  if (error) {
-    console.error("Error fetching student:", error);
+export async function addAttendanceRecord(record: Omit<AttendanceRecord, "id">) {
+  console.log('Sending attendance record:', record);
+  const res = await fetch(`${API_URL}/attendance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      student_id: record.student_id,
+      event_name: record.event_name,
+      timestamp: record.timestamp,
+      scanned_by: record.scanned_by,
+      studentName: record.studentName,
+    }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json();
+    console.error('Error adding attendance:', errorData);
     return null;
   }
-
+  const addedRecord = await res.json();
   return {
-    id: data.id,
-    name: data.name,
-    group: data.group,
-    course: data.course,
-    specialty: data.specialty,
-    qrCode: data.qr_code,
-    createdAt: new Date(data.created_at),
+    ...addedRecord,
+    id: addedRecord._id,
+    student_id: addedRecord.student_id,
+    event_name: addedRecord.event_name,
+    timestamp: new Date(addedRecord.timestamp), // Convert string to Date
+    scanned_by: addedRecord.scanned_by,
+    studentName: addedRecord.studentName,
   };
-};
+}
 
-export const getStudentByQRCode = async (qrCode: string): Promise<Student | null> => {
-  const { data, error } = await supabase.from("students").select("*").eq("qr_code", qrCode).single();
-
-  if (error) {
-    console.error("Error fetching student by QR code:", error);
-    return null;
+export async function checkAttendanceExists(studentId: string, eventName: string) {
+  try {
+    console.log(`Checking attendance for studentId: ${studentId}, eventName: ${eventName}`);
+    const res = await fetch(`${API_URL}/attendance/check?studentId=${studentId}&eventName=${eventName}`);
+    if (!res.ok) {
+      const errorData = await res.json();
+      console.error('Error checking attendance:', errorData);
+      throw new Error(`Error checking attendance: ${errorData.error || 'Unknown error'}`);
+    }
+    const result = await res.json();
+    console.log('Attendance check result:', result);
+    return result;
+  } catch (err) {
+    console.error('Error in checkAttendanceExists:', err);
+    throw err;
   }
+}
 
-  return {
-    id: data.id,
-    name: data.name,
-    group: data.group,
-    course: data.course,
-    specialty: data.specialty,
-    qrCode: data.qr_code,
-    createdAt: new Date(data.created_at),
-  };
-};
-
-export const addStudent = async (student: Omit<Student, "id" | "createdAt">): Promise<Student | null> => {
-  const { data, error } = await supabase
-    .from("students")
-    .insert({
-      name: student.name,
-      group: student.group,
-      course: student.course,
-      specialty: student.specialty,
-      qr_code: student.qrCode,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("Error adding student:", error);
-    return null;
-  }
-
-  return {
-    id: data.id,
-    name: data.name,
-    group: data.group,
-    course: data.course,
-    specialty: data.specialty,
-    qrCode: data.qr_code,
-    createdAt: new Date(data.created_at),
-  };
-};
-
-export const updateStudent = async (id: string, updates: Partial<Omit<Student, "id" | "createdAt">>): Promise<Student | null> => {
-  const updateData: any = {};
-  if (updates.name) updateData.name = updates.name;
-  if (updates.group) updateData.group = updates.group;
-  if (updates.course) updateData.course = updates.course;
-  if (updates.specialty) updateData.specialty = updates.specialty;
-  if (updates.qrCode) updateData.qr_code = updates.qrCode;
-
-  const { data, error } = await supabase.from("students").update(updateData).eq("id", id).select().single();
-
-  if (error) {
-    console.error("Error updating student:", error);
-    return null;
-  }
-
-  return {
-    id: data.id,
-    name: data.name,
-    group: data.group,
-    course: data.course,
-    specialty: data.specialty,
-    qrCode: data.qr_code,
-    createdAt: new Date(data.created_at),
-  };
-};
-
-export const deleteStudent = async (id: string): Promise<boolean> => {
-  const { error } = await supabase.from("students").delete().eq("id", id);
-
-  if (error) {
-    console.error("Error deleting student:", error);
-    return false;
-  }
-
-  return true;
-};
-
-// Attendance management functions
-export const getAllAttendanceRecords = async (): Promise<AttendanceRecord[]> => {
-  const { data, error } = await supabase
-    .from("attendance_records")
-    .select(`
-      *,
-      student:student_id (name)
-    `)
-    .order("timestamp", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching attendance records:", error);
-    return [];
-  }
-
-  return data.map((record) => ({
-    id: record.id,
-    studentId: record.student_id,
-    studentName: record.student.name,
-    eventName: record.event_name,
-    timestamp: new Date(record.timestamp),
-    scannedBy: record.scanned_by,
+export async function getAttendanceByEvent(eventName: string) {
+  const res = await fetch(`${API_URL}/attendance/event/${eventName}`);
+  if (!res.ok) throw new Error('Error fetching attendance by event');
+  const records = await res.json();
+  return records.map((record: any) => ({
+    ...record,
+    id: record._id,
+    student_id: record.student_id,
+    event_name: record.event_name,
+    timestamp: new Date(record.timestamp), // Convert string to Date
+    scanned_by: record.scanned_by,
+    studentName: record.studentName,
   }));
-};
+}
 
-export const addAttendanceRecord = async (record: Omit<AttendanceRecord, "id">): Promise<AttendanceRecord | null> => {
-  const { data, error } = await supabase
-    .from("attendance_records")
-    .insert({
-      student_id: record.studentId,
-      event_name: record.eventName,
-      timestamp: record.timestamp.toISOString(),
-      scanned_by: record.scannedBy,
-    })
-    .select(`
-      *,
-      student:student_id (name)
-    `)
-    .single();
+export async function deleteAttendanceRecord(recordId: string) {
+  const res = await fetch(`${API_URL}/attendance/${recordId}`, { method: 'DELETE' });
+  return res.ok;
+}
 
-  if (error) {
-    console.error("Error adding attendance record:", error);
-    return null;
-  }
-
-  return {
-    id: data.id,
-    studentId: data.student_id,
-    studentName: data.student.name,
-    eventName: data.event_name,
-    timestamp: new Date(data.timestamp),
-    scannedBy: data.scanned_by,
-  };
-};
-
-export const checkAttendanceExists = async (studentId: string, eventName: string): Promise<boolean> => {
-  const { data, error } = await supabase
-    .from("attendance_records")
-    .select("id")
-    .eq("student_id", studentId)
-    .eq("event_name", eventName)
-    .limit(1);
-
-  if (error) {
-    console.error("Error checking attendance:", error);
-    return false;
-  }
-
-  return data.length > 0;
-};
-
-export const getAttendanceByEvent = async (eventName: string): Promise<AttendanceRecord[]> => {
-  const { data, error } = await supabase
-    .from("attendance_records")
-    .select(`
-      *,
-      student:student_id (name, group, course)
-    `)
-    .eq("event_name", eventName)
-    .order("timestamp", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching attendance by event:", error);
-    return [];
-  }
-
-  return data.map((record) => ({
-    id: record.id,
-    studentId: record.student_id,
-    studentName: record.student.name,
-    eventName: record.event_name,
-    timestamp: new Date(record.timestamp),
-    scannedBy: record.scanned_by,
-  }));
-};
-
-export const getAttendanceByStudent = async (studentId: string): Promise<AttendanceRecord[]> => {
-  const { data, error } = await supabase
-    .from("attendance_records")
-    .select("*")
-    .eq("student_id", studentId)
-    .order("timestamp", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching attendance by student:", error);
-    return [];
-  }
-
-  return data.map((record) => ({
-    id: record.id,
-    studentId: record.student_id,
-    studentName: "", // Fill if needed
-    eventName: record.event_name,
-    timestamp: new Date(record.timestamp),
-    scannedBy: record.scanned_by,
-  }));
-};
-
-export const deleteAttendanceRecord = async (recordId: string): Promise<boolean> => {
-  const { error } = await supabase
-    .from("attendance_records")
-    .delete()
-    .eq("id", recordId);
-
-  if (error) {
-    console.error("Error deleting attendance record:", error);
-    return false;
-  }
-
-  return true;
-};
-
-// Event management functions
-export const getAllEvents = async (): Promise<Event[]> => {
-  const { data, error } = await supabase.from("events").select("*").order("date", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching events:", error);
-    return [];
-  }
-
-  return data.map((event) => ({
-    id: event.id,
+export async function getAllEvents() {
+  const res = await fetch(`${API_URL}/events`);
+  if (!res.ok) throw new Error('Error fetching events');
+  const events = await res.json();
+  return events.map((event: any) => ({
+    id: event._id,
     name: event.name,
     date: new Date(event.date),
     description: event.description,
-    isActive: event.is_active,
+    is_active: event.is_active,
   }));
-};
+}
 
-export const getActiveEvent = async (): Promise<Event | null> => {
-  const { data, error } = await supabase.from("events").select("*").eq("is_active", true).single();
-
-  if (error) {
-    console.error("Error fetching active event:", error);
-    return null;
-  }
-
-  if (!data) return null;
-
-  return {
-    id: data.id,
-    name: data.name,
-    date: new Date(data.date),
-    description: data.description,
-    isActive: data.is_active,
-  };
-};
-
-export const getActiveEvents = async (): Promise<Event[]> => {
-  const { data, error } = await supabase
-    .from("events")
-    .select("*")
-    .eq("is_active", true)
-    .order("date", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching active events:", error);
-    return [];
-  }
-
-  return data.map((event) => ({
-    id: event.id,
+export async function getActiveEvents() {
+  const res = await fetch(`${API_URL}/events/active`);
+  if (!res.ok) throw new Error('Error fetching active events');
+  const events = await res.json();
+  return events.map((event: any) => ({
+    id: event._id,
     name: event.name,
     date: new Date(event.date),
     description: event.description,
-    isActive: event.is_active,
+    is_active: event.is_active,
   }));
-};
+}
 
-export const addEvent = async (event: Omit<Event, "id">): Promise<Event | null> => {
-  const { data, error } = await supabase
-    .from("events")
-    .insert({
-      name: event.name,
-      date: event.date.toISOString(),
-      description: event.description,
-      is_active: event.isActive,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("Error adding event:", error);
-    return null;
-  }
-
+export async function addEvent(event: Omit<Event, "id">) {
+  const res = await fetch(`${API_URL}/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(event),
+  });
+  if (!res.ok) return null;
+  const addedEvent = await res.json();
   return {
-    id: data.id,
-    name: data.name,
-    date: new Date(data.date),
-    description: data.description,
-    isActive: data.is_active,
+    id: addedEvent._id,
+    name: addedEvent.name,
+    date: new Date(addedEvent.date),
+    description: addedEvent.description,
+    is_active: addedEvent.is_active,
   };
-};
+}
 
-export const setActiveEvent = async (eventId: string): Promise<boolean> => {
-  // Deactivate all
-  const { error: deactivateError } = await supabase.from("events").update({ is_active: false }).neq("id", "");
-
-  if (deactivateError) {
-    console.error("Error deactivating events:", deactivateError);
+export async function toggleEventActive(eventId: string, isActive: boolean) {
+  console.log(`Sending PUT to ${API_URL}/events/${eventId}/toggle-active with is_active: ${isActive}`);
+  const res = await fetch(`${API_URL}/events/${eventId}/toggle-active`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_active: isActive }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json();
+    console.error('Backend error in toggleEventActive:', errorData);
     return false;
   }
+  return res.ok;
+}
 
-  // Activate selected
-  const { error: activateError } = await supabase.from("events").update({ is_active: true }).eq("id", eventId);
+export async function getActiveEvent() {
+  const events = await getActiveEvents();
+  return events[0] || null;
+}
 
-  if (activateError) {
-    console.error("Error activating event:", activateError);
-    return false;
-  }
+export async function getAttendanceByStudent(studentId: string) {
+  throw new Error('Not implemented');
+}
 
-  return true;
-};
-
-export const toggleEventActive = async (eventId: string, isActive: boolean): Promise<boolean> => {
-  const { error } = await supabase.from("events").update({ is_active: isActive }).eq("id", eventId);
-
-  if (error) {
-    console.error(`Error ${isActive ? "activating" : "deactivating"} event:`, error);
-    return false;
-  }
-
-  return true;
-};
+export async function setActiveEvent(eventId: string) {
+  throw new Error('Not implemented');
+}

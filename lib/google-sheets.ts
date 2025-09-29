@@ -21,7 +21,7 @@ export const formatAttendanceForSheets = (attendanceRecords: any[], students: an
       student?.class || "Не указан",
       record.studentId,
       record.eventName,
-      record.scannedBy,
+      record.scanned_by,
     ]
   })
 
@@ -36,7 +36,7 @@ export const formatStudentsForSheets = (students: any[]) => {
     student.id,
     student.name,
     student.class,
-    student.qrCode,
+    student.qr_code,
     student.createdAt.toLocaleString("ru-RU"),
   ])
 

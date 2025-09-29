@@ -4,17 +4,17 @@ export interface Student {
   group: string // Группа (например, "ИТ-21", "ПИ-22")
   course: number // Курс от 1 до 4
   specialty: string // Специальность (например, "Информационные технологии", "Программирование")
-  qrCode: string
+  qr_code: string
   createdAt: Date
 }
 
 export interface AttendanceRecord {
-  id: string
-  studentId: string
-  studentName: string
-  eventName: string
-  timestamp: Date
-  scannedBy: string
+  id: string;
+  student_id: string;
+  studentName: string;
+  event_name: string;
+  timestamp: Date;
+  scanned_by: string;
 }
 
 export interface Event {
@@ -22,5 +22,5 @@ export interface Event {
   name: string
   date: Date
   description?: string
-  isActive: boolean
+  is_active: boolean
 }

@@ -43,7 +43,7 @@ const studentSchema = z.object({
   group: z.string().min(1, "Группа обязательна"),
   course: z.number().int().min(1).max(4, "Курс от 1 до 4"),
   specialty: z.string().min(1, "Специальность обязательна"),
-  qrCode: z.string().min(1, "QR-код обязателен"),
+  qr_code: z.string().min(1, "QR-код обязателен"), // Изменено с qrCode на qr_code
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -64,7 +64,7 @@ export default function StudentsPage() {
       group: "",
       course: 1,
       specialty: "",
-      qrCode: "",
+      qr_code: "", // Изменено с qrCode на qr_code
     },
   });
 
@@ -94,27 +94,27 @@ export default function StudentsPage() {
         group: editingStudent.group,
         course: editingStudent.course,
         specialty: editingStudent.specialty,
-        qrCode: editingStudent.qrCode,
+        qr_code: editingStudent.qr_code, // Изменено с qrCode на qr_code
       });
-      console.log("Editing student QR:", editingStudent.qrCode);
+      console.log("Editing student QR:", editingStudent.qr_code);
     } else {
       form.reset({
         name: "",
         group: "",
         course: 1,
         specialty: "",
-        qrCode: newQrCode,
+        qr_code: newQrCode, // Изменено с qrCode на qr_code
       });
       console.log("New QR Code generated:", newQrCode);
     }
   }, [editingStudent, form]);
 
-  // Generate QR code when modal opens or qrCode changes
+  // Generate QR code when modal opens or qr_code changes
   useEffect(() => {
-    if (isAddOpen && form.watch("qrCode")) {
+    if (isAddOpen && form.watch("qr_code")) {
       setQrError(null);
-      console.log("Generating QR for:", form.watch("qrCode"));
-      QRCode.toDataURL(form.watch("qrCode"), { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
+      console.log("Generating QR for:", form.watch("qr_code"));
+      QRCode.toDataURL(form.watch("qr_code"), { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
         if (err) {
           console.error("QR Code URL Error in Modal:", err);
           setQrError("Ошибка генерации QR-кода");
@@ -127,7 +127,7 @@ export default function StudentsPage() {
       setQrCodeURL("");
       setQrError(null);
     }
-  }, [isAddOpen, form.watch("qrCode")]);
+  }, [isAddOpen, form.watch("qr_code")]);
 
   const onSubmit = async (data: StudentFormData) => {
     try {
@@ -154,7 +154,7 @@ export default function StudentsPage() {
         group: "",
         course: 1,
         specialty: "",
-        qrCode: crypto.randomUUID(),
+        qr_code: crypto.randomUUID(), // Изменено с qrCode на qr_code
       });
       setQrCodeURL("");
       await loadStudents();
@@ -271,7 +271,7 @@ export default function StudentsPage() {
                   <div>
                     <Label>QR-код</Label>
                     <div className="mt-2 flex justify-center">
-                      {form.watch("qrCode") && qrCodeURL && !qrError ? (
+                      {form.watch("qr_code") && qrCodeURL && !qrError ? (
                         <div className="p-4 bg-white rounded-lg border-2 border-primary/20">
                           <img src={qrCodeURL} alt="QR-код" className="w-64 h-64" />
                         </div>
@@ -281,7 +281,7 @@ export default function StudentsPage() {
                         <p className="text-gray-500 text-sm">QR-код будет сгенерирован после заполнения формы</p>
                       )}
                     </div>
-                    <Input id="qrCode" {...form.register("qrCode")} type="hidden" />
+                    <Input id="qr_code" {...form.register("qr_code")} type="hidden" /> {/* Изменено с qrCode на qr_code */}
                   </div>
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
@@ -316,7 +316,7 @@ export default function StudentsPage() {
       {/* Students List */}
       <div className="grid gap-4">
         {students.map((student) => {
-          console.log("Rendering student:", student.name, "QR:", student.qrCode);
+          console.log("Rendering student:", student.name, "QR:", student.qr_code);
           return (
             <Card key={student.id} className="bg-white border-0 shadow-sm hover:shadow-md transition-shadow">
               <CardContent className="pt-6">
@@ -339,7 +339,7 @@ export default function StudentsPage() {
                         <Badge variant="outline" className="border-blue-200 text-blue-700">
                           {student.course} курс
                         </Badge>
-                        <span className="text-sm text-gray-500 truncate">QR: {student.qrCode || "Не установлен"}</span>
+                        <span className="text-sm text-gray-500 truncate">QR: {student.qr_code || "Не установлен"}</span>
                       </div>
                     </div>
                   </div>

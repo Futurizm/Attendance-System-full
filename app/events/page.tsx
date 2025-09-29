@@ -25,17 +25,17 @@ export default function EventsPage() {
     name: "",
     date: "",
     description: "",
-    isActive: false,
+    is_active: false,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false); // New state to prevent double submission
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch events and attendance on component mount
   useEffect(() => {
     const fetchEventsAndAttendance = async () => {
       setIsLoading(true);
       try {
         const fetchedEvents = await getAllEvents();
+        console.log('Fetched events:', fetchedEvents); // Debug log
         const attendancePromises = fetchedEvents.map(async (event) => ({
           eventName: event.name,
           attendance: await getAttendanceByEvent(event.name),
@@ -44,7 +44,8 @@ export default function EventsPage() {
         const newAttendanceMap = new Map(attendanceData.map(({ eventName, attendance }) => [eventName, attendance]));
         setEvents(fetchedEvents);
         setAttendanceMap(newAttendanceMap);
-      } catch (error) {
+      } catch (error: any) {
+        console.error("Error fetching events and attendance:", error);
         toast({
           title: "Ошибка",
           description: "Не удалось загрузить мероприятия или посещаемость",
@@ -59,23 +60,23 @@ export default function EventsPage() {
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    e.stopPropagation(); // Prevent event bubbling
-    if (isSubmitting) return; // Prevent double submission
+    e.stopPropagation();
+    if (isSubmitting) return;
     setIsSubmitting(true);
-    console.log("handleCreateEvent called with:", newEvent); // Debug log
+    console.log("handleCreateEvent called with:", newEvent);
     try {
       const eventToAdd = {
         name: newEvent.name,
         date: new Date(newEvent.date),
         description: newEvent.description,
-        isActive: newEvent.isActive,
+        is_active: newEvent.is_active,
       };
       const addedEvent = await addEvent(eventToAdd);
       if (addedEvent) {
-        console.log("Event added:", addedEvent); // Debug log
+        console.log("Event added:", addedEvent);
         setEvents((prev) => {
           const updatedEvents = [addedEvent, ...prev];
-          console.log("Updated events state:", updatedEvents); // Debug log
+          console.log("Updated events state:", updatedEvents);
           return updatedEvents;
         });
         setAttendanceMap((prev) => new Map(prev).set(addedEvent.name, []));
@@ -84,16 +85,12 @@ export default function EventsPage() {
           description: "Мероприятие успешно создано",
         });
         setIsCreateDialogOpen(false);
-        setNewEvent({ name: "", date: "", description: "", isActive: false });
+        setNewEvent({ name: "", date: "", description: "", is_active: false });
       } else {
-        toast({
-          title: "Ошибка",
-          description: "Не удалось создать мероприятие",
-          variant: "destructive",
-        });
+        throw new Error("Failed to add event");
       }
     } catch (error: any) {
-      console.error("Error in handleCreateEvent:", error); // Enhanced error logging
+      console.error("Error in handleCreateEvent:", error);
       toast({
         title: "Ошибка",
         description: `Произошла ошибка при создании мероприятия: ${error.message || "Неизвестная ошибка"}`,
@@ -105,12 +102,23 @@ export default function EventsPage() {
   };
 
   const handleToggleEventActive = async (eventId: string, currentActive: boolean) => {
+    console.log(`Attempting to toggle event ${eventId} to ${!currentActive}`);
+    if (!eventId || eventId === 'undefined') {
+      console.error('Invalid eventId:', eventId);
+      toast({
+        title: "Ошибка",
+        description: "Недействительный ID мероприятия",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const success = await toggleEventActive(eventId, !currentActive);
+      console.log("toggleEventActive result:", success);
       if (success) {
         setEvents((prev) =>
           prev.map((event) =>
-            event.id === eventId ? { ...event, isActive: !currentActive } : event
+            event.id === eventId ? { ...event, is_active: !currentActive } : event
           )
         );
         toast({
@@ -118,16 +126,13 @@ export default function EventsPage() {
           description: `Мероприятие ${currentActive ? "деактивировано" : "активировано"}`,
         });
       } else {
-        toast({
-          title: "Ошибка",
-          description: `Не удалось ${currentActive ? "деактивировать" : "активировать"} мероприятие`,
-          variant: "destructive",
-        });
+        throw new Error("Failed to toggle event active status");
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error in handleToggleEventActive:", error);
       toast({
         title: "Ошибка",
-        description: `Произошла ошибка при ${currentActive ? "деактивации" : "активации"} мероприятия`,
+        description: `Произошла ошибка при ${currentActive ? "деактивации" : "активации"} мероприятия: ${error.message || "Неизвестная ошибка"}`,
         variant: "destructive",
       });
     }
@@ -148,22 +153,20 @@ export default function EventsPage() {
           description: "Запись о посещении удалена",
         });
       } else {
-        toast({
-          title: "Ошибка",
-          description: "Не удалось удалить запись о посещении",
-          variant: "destructive",
-        });
+        throw new Error("Failed to delete attendance record");
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error deleting attendance:", error);
       toast({
         title: "Ошибка",
-        description: "Произошла ошибка при удалении записи",
+        description: `Произошла ошибка при удалении записи: ${error.message || "Неизвестная ошибка"}`,
         variant: "destructive",
       });
     }
   };
 
   const openDetailsDialog = (event: Event) => {
+    console.log('Opening details for event:', event); // Debug log
     setSelectedEvent(event);
     setIsDetailsDialogOpen(true);
   };
@@ -220,12 +223,12 @@ export default function EventsPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="isActive">Активно</Label>
+                  <Label htmlFor="is_active">Активно</Label>
                   <Input
-                    id="isActive"
+                    id="is_active"
                     type="checkbox"
-                    checked={newEvent.isActive}
-                    onChange={(e) => setNewEvent({ ...newEvent, isActive: e.target.checked })}
+                    checked={newEvent.is_active}
+                    onChange={(e) => setNewEvent({ ...newEvent, is_active: e.target.checked })}
                     disabled={isSubmitting}
                   />
                 </div>
@@ -272,17 +275,17 @@ export default function EventsPage() {
                       </div>
                     </div>
                     <div className="flex flex-col justify-center gap-2 flex-shrink-0">
-                      {event.isActive && <Badge variant="default">Активно</Badge>}
+                      {event.is_active && <Badge variant="default">Активно</Badge>}
                       <Button
                         variant="outline"
                         size="sm"
                         className="whitespace-nowrap"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleToggleEventActive(event.id, event.isActive);
+                          handleToggleEventActive(event.id, event.is_active);
                         }}
                       >
-                        {event.isActive ? "Деактивировать" : "Активировать"}
+                        {event.is_active ? "Деактивировать" : "Активировать"}
                       </Button>
                     </div>
                   </div>
@@ -322,7 +325,7 @@ export default function EventsPage() {
                     <strong>Описание:</strong> {selectedEvent.description || "Нет описания"}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    <strong>Статус:</strong> {selectedEvent.isActive ? "Активно" : "Неактивно"}
+                    <strong>Статус:</strong> {selectedEvent.is_active ? "Активно" : "Неактивно"}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     <strong>Посещений:</strong> {attendanceMap.get(selectedEvent.name)?.length || 0}
@@ -346,7 +349,7 @@ export default function EventsPage() {
                             <TableRow key={record.id}>
                               <TableCell className="truncate">{record.studentName}</TableCell>
                               <TableCell>{record.timestamp.toLocaleString("ru-RU")}</TableCell>
-                              <TableCell>{record.scannedBy}</TableCell>
+                              <TableCell>{record.scanned_by}</TableCell>
                               <TableCell>
                                 <Button
                                   variant="destructive"

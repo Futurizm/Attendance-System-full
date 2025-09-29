@@ -1,4 +1,3 @@
-// app/page.tsx
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, QrCode, Calendar, BarChart3, FileSpreadsheet, Settings } from "lucide-react";
@@ -13,7 +12,7 @@ export default async function HomePage() {
   const activeEvent = await getActiveEvent();
 
   const todayAttendance = attendanceRecords.filter(
-    (record) => record.timestamp.toDateString() === new Date().toDateString(),
+    (record) => record.timestamp.toDateString() === new Date().toDateString()
   );
 
   const attendanceRate =

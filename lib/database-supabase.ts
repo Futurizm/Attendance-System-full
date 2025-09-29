@@ -18,7 +18,7 @@ export const getAllStudents = async (): Promise<Student[]> => {
     group: student.group,
     course: student.course,
     specialty: student.specialty,
-    qrCode: student.qr_code,
+    qr_code: student.qr_code,
     createdAt: new Date(student.created_at),
   }))
 }
@@ -148,7 +148,7 @@ export const getAllAttendanceRecords = async (): Promise<AttendanceRecord[]> => 
     studentName: record.student.name,
     eventName: record.event_name,
     timestamp: new Date(record.timestamp),
-    scannedBy: record.scanned_by,
+    scanned_by: record.scanned_by,
   }))
 }
 
@@ -159,7 +159,7 @@ export const addAttendanceRecord = async (record: Omit<AttendanceRecord, "id">):
       student_id: record.studentId,
       event_name: record.eventName,
       timestamp: record.timestamp.toISOString(),
-      scanned_by: record.scannedBy,
+      scanned_by: record.scanned_by,
     })
     .select(`
       *,
@@ -178,7 +178,7 @@ export const addAttendanceRecord = async (record: Omit<AttendanceRecord, "id">):
     studentName: data.student.name,
     eventName: data.event_name,
     timestamp: new Date(data.timestamp),
-    scannedBy: data.scanned_by,
+    scanned_by: data.scanned_by,
   }
 }
 
@@ -203,7 +203,7 @@ export const getAttendanceByEvent = async (eventName: string): Promise<Attendanc
     studentName: record.student.name,
     eventName: record.event_name,
     timestamp: new Date(record.timestamp),
-    scannedBy: record.scanned_by,
+    scanned_by: record.scanned_by,
   }))
 }
 
@@ -225,7 +225,7 @@ export const getAttendanceByStudent = async (studentId: string): Promise<Attenda
     studentName: "", // Fill if needed
     eventName: record.event_name,
     timestamp: new Date(record.timestamp),
-    scannedBy: record.scanned_by,
+    scanned_by: record.scanned_by,
   }))
 }
 

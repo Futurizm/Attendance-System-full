@@ -21,7 +21,7 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
   const [error, setError] = useState<string | null>(null);
 
   const generateQRCode = () => {
-    if (!student.qrCode) {
+    if (!student.qr_code) {
       setError("QR-код не задан для этого студента");
       setQRCodeURL("");
       return;
@@ -32,7 +32,7 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
     // Generate QR code for canvas
     if (canvasRef.current) {
       try {
-        QRCode.toCanvas(canvasRef.current, student.qrCode, { 
+        QRCode.toCanvas(canvasRef.current, student.qr_code, { 
           width: 256, 
           margin: 2, 
           errorCorrectionLevel: "H" 
@@ -52,7 +52,7 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
 
     // Generate QR code for print/download
     try {
-      QRCode.toDataURL(student.qrCode, { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
+      QRCode.toDataURL(student.qr_code, { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
         if (err) {
           console.error("QR Code URL Error:", err);
           setError("Ошибка генерации URL QR-кода");
@@ -69,13 +69,13 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
   };
 
   useEffect(() => {
-    if (isOpen && student.qrCode) {
+    if (isOpen && student.qr_code) {
       generateQRCode();
     } else {
       setQRCodeURL("");
       setError(null);
     }
-  }, [isOpen, student.qrCode]);
+  }, [isOpen, student.qr_code]);
 
   const handlePrint = () => {
     if (!qrCodeURL) {
@@ -122,7 +122,7 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
                 <p>Группа: ${student.group}</p>
                 <p>Курс: ${student.course}</p>
                 <p>Специальность: ${student.specialty}</p>
-                <p>ID: ${student.qrCode || "Не задан"}</p>
+                <p>ID: ${student.qr_code || "Не задан"}</p>
               </div>
               <div class="qr-code">
                 <img src="${qrCodeURL}" alt="QR-код для ${student.name}" />
@@ -173,7 +173,7 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
                 <div className="flex items-center justify-center gap-2 flex-wrap">
                   <Badge variant="secondary">{student.group}</Badge>
                   <Badge variant="outline">Курс: {student.course}</Badge>
-                  <Badge variant="outline">ID: {student.qrCode || "Не задан"}</Badge>
+                  <Badge variant="outline">ID: {student.qr_code || "Не задан"}</Badge>
                 </div>
               </div>
             </CardContent>

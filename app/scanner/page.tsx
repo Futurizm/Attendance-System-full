@@ -118,7 +118,7 @@ export default function ScannerPage() {
                         <Users className="h-4 w-4" />
                         Отмечено сегодня: {
                           todayAttendance.filter(
-                            (r) => r.eventName === activeEvents.find((e) => e.id === selectedEvent)?.name
+                            (r) => r.event_name === activeEvents.find((e) => e.id === selectedEvent)?.name
                           ).length
                         }
                       </div>
@@ -167,14 +167,14 @@ export default function ScannerPage() {
             <CardContent>
               <div className="space-y-2">
                 {todayAttendance
-                  .filter((record) => record.eventName === activeEvents.find((e) => e.id === selectedEvent)?.name)
+                  .filter((record) => record.event_name === activeEvents.find((e) => e.id === selectedEvent)?.name)
                   .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                   .slice(0, 5)
-                  .map((record) => (
-                    <div key={record.id} className="flex items-center justify-between p-2 rounded border">
+                  .map((record, index) => (
+                    <div key={record.id + index} className="flex items-center justify-between p-2 rounded border">
                       <div>
                         <div className="font-medium">{record.studentName}</div>
-                        <div className="text-sm text-muted-foreground">{record.eventName}</div>
+                        <div className="text-sm text-muted-foreground">{record.event_name}</div>
                       </div>
                       <div className="text-sm text-muted-foreground">
                         {new Date(record.timestamp).toLocaleTimeString("ru-RU")}
@@ -183,14 +183,14 @@ export default function ScannerPage() {
                   ))}
               </div>
               {todayAttendance.filter(
-                (r) => r.eventName === activeEvents.find((e) => e.id === selectedEvent)?.name
+                (r) => r.event_name === activeEvents.find((e) => e.id === selectedEvent)?.name
               ).length > 5 && (
                 <div className="mt-4 text-center">
                   <Link href="/reports">
                     <Button variant="outline" size="sm">
                       Посмотреть все (
                       {todayAttendance.filter(
-                        (r) => r.eventName === activeEvents.find((e) => e.id === selectedEvent)?.name
+                        (r) => r.event_name === activeEvents.find((e) => e.id === selectedEvent)?.name
                       ).length}
                       )
                     </Button>
