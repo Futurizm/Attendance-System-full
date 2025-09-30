@@ -7,6 +7,7 @@ export interface Student {
   course: number; // Курс от 1 до 4
   specialty: string; // Специальность (например, "Информационные технологии", "Программирование")
   qr_code: string;
+  school_id: string; // ID школы (обязательно для привязки студента)
   createdAt: Date;
 }
 

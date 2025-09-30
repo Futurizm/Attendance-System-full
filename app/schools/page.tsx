@@ -10,12 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from "sonner";
 import { LogOut, Plus, Edit, Trash2 } from "lucide-react";
 import Link from "next/link";
-
-interface School {
-  _id: string;
-  name: string;
-  created_at: string;
-}
+import { getAllSchools, addSchool, updateSchool, deleteSchool } from "@/lib/database"; // Импорт API
+import { School } from "@/lib/types"; // Импорт типа School
 
 export default function SchoolsPage() {
   const router = useRouter();
@@ -24,28 +20,21 @@ export default function SchoolsPage() {
   const [editingSchool, setEditingSchool] = useState<School | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
+    const t = localStorage.getItem("token");
+    if (!t) {
       router.push("/login");
       return;
     }
-
-    fetchSchools(token);
+    setToken(t);
+    fetchSchools(t);
   }, [router]);
 
-  const fetchSchools = async (token: string) => {
+  const fetchSchools = async (t: string) => {
     try {
-      const response = await fetch("http://localhost:5000/api/schools", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        router.push("/login");
-        return;
-      }
-      const data = await response.json();
+      const data = await getAllSchools(t);
       setSchools(data);
     } catch (err) {
       console.error("Error fetching schools:", err);
@@ -56,61 +45,33 @@ export default function SchoolsPage() {
   };
 
   const handleCreateOrUpdateSchool = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
+    if (!token) return;
     try {
-      const url = editingSchool
-        ? `http://localhost:5000/api/schools/${editingSchool._id}`
-        : "http://localhost:5000/api/schools";
-      const method = editingSchool ? "PUT" : "POST";
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name: newSchoolName }),
-      });
-
-      if (response.ok) {
+      let updatedSchool: School | null = null;
+      if (editingSchool) {
+        updatedSchool = await updateSchool(editingSchool.id, newSchoolName, token);
+      } else {
+        updatedSchool = await addSchool(newSchoolName, token);
+      }
+      if (updatedSchool) {
         await fetchSchools(token);
         setIsDialogOpen(false);
         setNewSchoolName("");
         setEditingSchool(null);
         toast.success(editingSchool ? "Школа обновлена" : "Школа создана");
-      } else {
-        toast.error("Ошибка при сохранении школы");
       }
     } catch (err) {
-      console.error("Error saving school:", err);
       toast.error("Ошибка при сохранении школы");
     }
   };
 
   const handleDeleteSchool = async (id: string) => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
+    if (!token) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/schools/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) {
-        await fetchSchools(token);
-        toast.success("Школа удалена");
-      } else {
-        toast.error("Ошибка при удалении школы");
-      }
+      await deleteSchool(id, token);
+      await fetchSchools(token);
+      toast.success("Школа удалена");
     } catch (err) {
-      console.error("Error deleting school:", err);
       toast.error("Ошибка при удалении школы");
     }
   };
@@ -120,7 +81,7 @@ export default function SchoolsPage() {
     router.push("/login");
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen">Загрузка...</div>;
 
   return (
     <div className="min-h-screen bg-background">
@@ -172,14 +133,17 @@ export default function SchoolsPage() {
 
         <div className="grid gap-4">
           {schools.map((school) => (
-            <Card key={school._id}>
+            <Card key={school.id}>
               <CardHeader>
                 <CardTitle>{school.name}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex justify-between">
-                  <p>Создано: {new Date(school.created_at).toLocaleDateString("ru-RU")}</p>
-                  <div className="flex gap-2">
+                <div className="flex justify-between items-center">
+                  <p>Создано: {school.createdAt.toLocaleDateString("ru-RU")}</p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Link href={`/schools/${school.id}`}>
+                      <Button variant="default">Управлять</Button>
+                    </Link>
                     <Button
                       variant="outline"
                       onClick={() => {
@@ -191,7 +155,7 @@ export default function SchoolsPage() {
                       <Edit className="h-4 w-4 mr-2" />
                       Редактировать
                     </Button>
-                    <Button variant="destructive" onClick={() => handleDeleteSchool(school._id)}>
+                    <Button variant="destructive" onClick={() => handleDeleteSchool(school.id)}>
                       <Trash2 className="h-4 w-4 mr-2" />
                       Удалить
                     </Button>

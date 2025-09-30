@@ -50,6 +50,7 @@ export async function getStudentById(id: string, token: string): Promise<Student
     group: student.group,
     course: student.course,
     specialty: student.specialty,
+    school_id: student.school_id,
     qr_code: student.qr_code,
     createdAt: new Date(student.created_at),
   };
@@ -78,22 +79,19 @@ export async function getStudentByqr_code(qr_code: string, token: string): Promi
     course: student.course,
     specialty: student.specialty,
     qr_code: student.qr_code,
+    school_id: student.school_id,
     createdAt: new Date(student.created_at),
   };
 }
 
-export async function addStudent(student: Omit<Student, "id" | "createdAt">, token: string): Promise<Student | null> {
-  console.log("Sending student to backend:", JSON.stringify(student, null, 2));
-  console.log("Request sent to:", `${API_URL}/students`);
-  console.log("Headers:", { Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
-  console.log("Body:", JSON.stringify(student));
+export async function addStudent(student: Omit<Student, "id" | "createdAt"> & { school_id?: string }, token: string): Promise<Student | null> {
   const res = await fetch(`${API_URL}/students`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(student),
+    body: JSON.stringify(student), // Теперь включает school_id если передан
   });
   console.log("Response status:", res.status);
   if (!res.ok) {
@@ -110,6 +108,7 @@ export async function addStudent(student: Omit<Student, "id" | "createdAt">, tok
     course: addedStudent.course,
     specialty: addedStudent.specialty,
     qr_code: addedStudent.qr_code,
+    school_id: addedStudent.school_id?._id || addedStudent.school_id,  // Поддержка populate
     createdAt: new Date(addedStudent.created_at),
   };
 }
@@ -137,6 +136,7 @@ export async function updateStudent(id: string, updates: Partial<Omit<Student, "
     course: updatedStudent.course,
     specialty: updatedStudent.specialty,
     qr_code: updatedStudent.qr_code,
+    school_id: updatedStudent.school_id?._id || updatedStudent.school_id,
     createdAt: new Date(updatedStudent.created_at),
   };
 }
@@ -489,8 +489,11 @@ export async function deleteSchool(id: string, token: string): Promise<boolean> 
   return res.ok;
 }
 
-export async function getAllUsers(token: string): Promise<User[]> {
-  const res = await fetch(`${API_URL}/api/users`, {
+export async function getAllUsers(token: string, schoolId?: string, role?: string): Promise<User[]> {
+  let url = `${API_URL}/api/users`;
+  if (schoolId) url += `?school_id=${schoolId}`;
+  if (role) url += `${schoolId ? '&' : '?'}role=${role}`;
+  const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -576,5 +579,114 @@ export async function getAnalytics(token: string): Promise<AnalyticsData> {
     totalEvents: data.totalEvents,
     totalAttendance: data.totalAttendance,
     attendanceBySchool: data.attendanceBySchool,
+  };
+}
+
+export async function getUsersBySchoolAndRole(schoolId: string, role: string, token: string): Promise<User[]> {
+  const res = await fetch(`${API_URL}/api/users?school_id=${schoolId}&role=${role}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(`Error fetching users: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  const users = await res.json();
+  return users.map((user: any) => ({
+    id: user._id,
+    email: user.email,
+    role: user.role,
+    school_id: user.school_id?._id,
+    school: user.school_id ? { id: user.school_id._id, name: user.school_id.name } : undefined,
+    createdAt: new Date(user.created_at),
+  }));
+}
+
+export async function getStudentsBySchool(schoolId: string, token: string): Promise<Student[]> {
+  const res = await fetch(`${API_URL}/students?school_id=${schoolId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(`Error fetching students: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  const students = await res.json();
+  return students.map((student: any) => ({
+    id: student._id,
+    name: student.name,
+    group: student.group,
+    course: student.course,
+    specialty: student.specialty,
+    qr_code: student.qr_code,
+    school_id: student.school_id,
+    createdAt: new Date(student.created_at),
+  }));
+}
+
+export async function getEventsBySchool(schoolId: string, token: string): Promise<Event[]> {
+  const res = await fetch(`${API_URL}/events?school_id=${schoolId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(`Error fetching events: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  const events = await res.json();
+  return events.map((event: any) => ({
+    id: event._id,
+    name: event.name,
+    date: new Date(event.date),
+    description: event.description,
+    is_active: event.is_active,
+    school_id: event.school_id,
+  }));
+}
+
+export async function getAttendanceBySchool(schoolId: string, token: string): Promise<AttendanceRecord[]> {
+  const res = await fetch(`${API_URL}/attendance?school_id=${schoolId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(`Error fetching attendance: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  const records = await res.json();
+  return records.map((record: any) => ({
+    id: record._id,
+    student_id: record.student_id,
+    event_name: record.event_name,
+    timestamp: new Date(record.timestamp),
+    scanned_by: record.scanned_by,
+    studentName: record.studentName,
+  }));
+}
+
+export async function getSchoolById(id: string, token: string): Promise<School> {
+  const res = await fetch(`${API_URL}/api/schools/${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(`Error fetching school: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  const schoolData = await res.json();
+  return {
+    id: schoolData._id,
+    name: schoolData.name,
+    createdAt: new Date(schoolData.created_at),
   };
 }

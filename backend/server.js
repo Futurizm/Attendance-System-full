@@ -162,16 +162,21 @@ app.delete("/api/schools/:id", authMiddleware, roleMiddleware(["main_admin"]), a
 })
 
 // Users routes
-app.get("/api/users", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
+app.get('/api/users', authMiddleware, roleMiddleware(['main_admin']), async (req, res) => {
   try {
-    const users = await User.find().populate("school_id", "name").sort({ created_at: -1 })
-    console.log("Fetched users:", users)
-    res.json(users)
+    let query = {};
+    if (req.query.school_id) {
+      const rolesFilter = req.query.role ? [req.query.role] : ['school_admin', 'teacher', 'parent'];
+      query = { school_id: req.query.school_id, role: { $in: rolesFilter } };
+    }
+    const users = await User.find(query).populate('school_id', 'name').sort({ created_at: -1 });
+    console.log('Fetched users:', users);
+    res.json(users);
   } catch (err) {
-    console.error("Error fetching users:", err.message, err.stack)
-    res.status(500).json({ error: "Error fetching users", details: err.message })
+    console.error('Error fetching users:', err.message, err.stack);
+    res.status(500).json({ error: 'Error fetching users', details: err.message });
   }
-})
+});
 
 app.delete("/api/users/:id", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
   try {
@@ -186,17 +191,23 @@ app.delete("/api/users/:id", authMiddleware, roleMiddleware(["main_admin"]), asy
 })
 
 // Students routes
-app.get("/students", authMiddleware, async (req, res) => {
+app.get('/students', authMiddleware, async (req, res) => {
   try {
-    const query = req.user.role === "school_admin" ? { school_id: req.user.school_id } : {}
-    const students = await Student.find(query).sort({ created_at: -1 })
-    console.log("Fetched students:", students)
-    res.json(students)
+    let query = {};
+    if (req.user.role === 'school_admin') {
+      query = { school_id: req.user.school_id };
+    } else if (req.query.school_id) {
+      query = { school_id: req.query.school_id };
+    }
+    // Для main_admin без school_id — все студенты
+    const students = await Student.find(query).sort({ created_at: -1 });
+    console.log('Fetched students:', students);
+    res.json(students);
   } catch (err) {
-    console.error("Error fetching students:", err.message, err.stack)
-    res.status(500).json({ error: "Error fetching students", details: err.message })
+    console.error('Error fetching students:', err.message, err.stack);
+    res.status(500).json({ error: 'Error fetching students', details: err.message });
   }
-})
+});
 
 app.get("/students/:id", authMiddleware, async (req, res) => {
   try {
@@ -233,30 +244,38 @@ app.get(
   },
 )
 
-app.post("/students", authMiddleware, roleMiddleware(["school_admin", "main_admin"]), async (req, res) => {
+app.post('/students', authMiddleware, roleMiddleware(['school_admin', 'main_admin']), async (req, res) => {
   try {
-    console.log("Received POST /students with body:", JSON.stringify(req.body, null, 2))
-    console.log("User:", req.user)
-    if (req.user.role === "school_admin") {
+    console.log('Received POST /students with body:', JSON.stringify(req.body, null, 2));
+    console.log('User:', req.user);
+    if (req.user.role === 'school_admin') {
       if (!req.user.school_id) {
-        console.log("School ID missing for school_admin")
-        return res.status(400).json({ error: "School ID missing for school_admin user" })
+        console.log('School ID missing for school_admin');
+        return res.status(400).json({ error: 'School ID missing for school_admin user' });
       }
-      req.body.school_id = req.user.school_id // Set school_id for school_admin
-      console.log("Set school_id for school_admin:", req.body.school_id)
+      req.body.school_id = req.user.school_id; // Set school_id for school_admin
+      console.log('Set school_id for school_admin:', req.body.school_id);
+    } 
+    // Для main_admin: используем school_id из body, если передан
+    if (!req.body.school_id) {
+      return res.status(400).json({ error: 'School ID required' });
     }
-    const school = await School.findById(req.body.school_id)
-
-    console.log("Found school:", school)
-    const student = new Student(req.body)
-    await student.save()
-    console.log("Student saved:", student)
-    res.json(student)
+    const school = await School.findById(req.body.school_id);
+    if (!school) {
+      return res.status(400).json({ error: 'School not found' });
+    }
+    console.log('Found school:', school);
+    const student = new Student(req.body);
+    await student.save();
+    // Добавьте populate для school_id в ответе
+    const populatedStudent = await Student.findById(student._id).populate('school_id', 'name');
+    console.log('Student saved:', populatedStudent);
+    res.json(populatedStudent);
   } catch (err) {
-    console.error("Error adding student:", err.message, err.stack)
-    res.status(500).json({ error: "Error adding student", details: err.message })
+    console.error('Error adding student:', err.message, err.stack);
+    res.status(500).json({ error: 'Error adding student', details: err.message });
   }
-})
+});
 
 app.put("/students/:id", authMiddleware, roleMiddleware(["school_admin", "main_admin"]), async (req, res) => {
   try {
@@ -269,10 +288,11 @@ app.put("/students/:id", authMiddleware, roleMiddleware(["school_admin", "main_a
       const school = await School.findById(req.body.school_id)
       if (!school) return res.status(400).json({ error: "School not found" })
     }
-    const student = await Student.findOneAndUpdate(query, req.body, { new: true })
-    if (!student) return res.status(404).json({ error: "Student not found" })
-    console.log("Updated student:", student)
-    res.json(student)
+    const student = await Student.findOneAndUpdate(query, req.body, { new: true });
+    if (!student) return res.status(404).json({ error: "Student not found" });
+    const populatedStudent = await Student.findById(student._id).populate('school_id', 'name');
+    console.log("Updated student:", populatedStudent);
+    res.json(populatedStudent);
   } catch (err) {
     console.error("Error updating student:", err.message, err.stack)
     res.status(500).json({ error: "Error updating student", details: err.message })
@@ -294,17 +314,22 @@ app.delete("/students/:id", authMiddleware, roleMiddleware(["school_admin", "mai
 })
 
 // Events routes
-app.get("/events", authMiddleware, async (req, res) => {
+app.get('/events', authMiddleware, async (req, res) => {
   try {
-    const query = req.user.role === "school_admin" ? { school_id: req.user.school_id } : {}
-    const events = await Event.find(query).sort({ date: -1 })
-    console.log("Fetched events:", events)
-    res.json(events)
+    let query = {};
+    if (req.user.role === 'school_admin') {
+      query = { school_id: req.user.school_id };
+    } else if (req.query.school_id) {
+      query = { school_id: req.query.school_id };
+    }
+    const events = await Event.find(query).sort({ date: -1 });
+    console.log('Fetched events:', events);
+    res.json(events);
   } catch (err) {
-    console.error("Error fetching events:", err.message, err.stack)
-    res.status(500).json({ error: "Error fetching events", details: err.message })
+    console.error('Error fetching events:', err.message, err.stack);
+    res.status(500).json({ error: 'Error fetching events', details: err.message });
   }
-})
+});
 
 app.get("/events/active", authMiddleware, async (req, res) => {
   try {
@@ -333,21 +358,34 @@ app.get("/events/:id", authMiddleware, async (req, res) => {
   }
 })
 
-app.post("/events", authMiddleware, roleMiddleware(["teacher", "school_admin", "main_admin"]), async (req, res) => {
+app.post('/events', authMiddleware, roleMiddleware(['teacher', 'school_admin', 'main_admin']), async (req, res) => {
   try {
-    console.log("Received POST /events with body:", JSON.stringify(req.body, null, 2))
-    console.log("User:", req.user)
-
-    const school = await School.findById(req.body.school_id)
-    const event = new Event(req.body)
-    await event.save()
-    console.log("Event saved:", event)
-    res.json(event)
+    console.log('Received POST /events with body:', JSON.stringify(req.body, null, 2));
+    console.log('User:', req.user);
+    
+    // Для school_admin: set school_id
+    if (req.user.role === 'school_admin') {
+      req.body.school_id = req.user.school_id;
+    }
+    // Для main_admin: require school_id from body
+    if (!req.body.school_id) {
+      return res.status(400).json({ error: 'School ID required' });
+    }
+    const school = await School.findById(req.body.school_id);
+    if (!school) {
+      return res.status(400).json({ error: 'School not found' });
+    }
+    const event = new Event(req.body);
+    await event.save();
+    // Добавьте populate для school_id в ответе
+    const populatedEvent = await Event.findById(event._id).populate('school_id', 'name');
+    console.log('Event saved:', populatedEvent);
+    res.json(populatedEvent);
   } catch (err) {
-    console.error("Error adding event:", err.message, err.stack)
-    res.status(500).json({ error: "Error adding event", details: err.message })
+    console.error('Error adding event:', err.message, err.stack);
+    res.status(500).json({ error: 'Error adding event', details: err.message });
   }
-})
+});
 
 app.put(
   "/events/:id/toggle-active",
@@ -379,73 +417,100 @@ app.put(
 )
 
 // Attendance routes
-app.get("/attendance", authMiddleware, async (req, res) => {
+app.get('/attendance', authMiddleware, async (req, res) => {
   try {
-    const query =
-      req.user.role === "school_admin"
-        ? { student_id: { $in: (await Student.find({ school_id: req.user.school_id })).map((s) => s._id) } }
-        : {}
-    const records = await AttendanceRecord.find(query).populate("student_id", "name").sort({ timestamp: -1 })
-    res.json(
-      records
-        .filter(record => record.student_id) // Skip invalid records where student_id is null after populate
-        .map((record) => ({
-          ...record.toObject(),
-          studentName: record.student_id?.name || "Unknown", // Fallback for safety
-          student_id: record.student_id?._id, // Use populated _id
-        })),
-    )
-  } catch (err) {
-    console.error("Error fetching attendance:", err.message, err.stack)
-    res.status(500).json({ error: "Error fetching attendance", details: err.message })
-  }
-})
-
-app.get("/attendance/event/:eventName", authMiddleware, async (req, res) => {
-  try {
-    const query =
-      req.user.role === "school_admin"
-        ? {
-            event_name: req.params.eventName,
-            student_id: { $in: (await Student.find({ school_id: req.user.school_id })).map((s) => s._id) },
-          }
-        : { event_name: req.params.eventName }
+    let query = {};
+    if (req.user.role === 'school_admin') {
+      query = { student_id: { $in: (await Student.find({ school_id: req.user.school_id })).map(s => s._id) } };
+    } else if (req.user.role === 'main_admin' && !req.query.school_id) {
+      // Для main_admin без school_id — все посещения из всех школ
+      query = {};
+    } else if (req.query.school_id) {
+      const schoolStudents = await Student.find({ school_id: req.query.school_id }).select('_id');
+      query = { student_id: { $in: schoolStudents.map(s => s._id) } };
+    }
+    console.log('Attendance query:', query); // Лог для отладки
     const records = await AttendanceRecord.find(query)
-      .populate("student_id", "name group course")
-      .sort({ timestamp: -1 })
-    res.json(
-      records.map((record) => ({
-        ...record.toObject(),
-        studentName: record.student_id.name,
-      })),
-    )
+      .populate('student_id', 'name')
+      .sort({ timestamp: -1 });
+    res.json(records.map(record => ({
+      ...record.toObject(),
+      studentName: record.student_id ? record.student_id.name : 'Unknown Student',
+      student_id: record.student_id ? record.student_id._id : null,
+    })));
   } catch (err) {
-    console.error("Error fetching attendance by event:", err.message, err.stack)
-    res.status(500).json({ error: "Error fetching attendance by event", details: err.message })
+    console.error('Error fetching attendance:', err.message, err.stack);
+    res.status(500).json({ error: 'Error fetching attendance', details: err.message });
   }
-})
+});
 
-app.get("/attendance/student/:studentId", authMiddleware, async (req, res) => {
+// Новый роут для событий конкретной школы
+app.get('/api/events/school/:schoolId', authMiddleware, async (req, res) => {
   try {
-    const query =
-      req.user.role === "school_admin"
-        ? {
-            student_id: req.params.studentId,
-            student_id: { $in: (await Student.find({ school_id: req.user.school_id })).map((s) => s._id) },
-          }
-        : { student_id: req.params.studentId }
-    const records = await AttendanceRecord.find(query).populate("student_id", "name").sort({ timestamp: -1 })
-    res.json(
-      records.map((record) => ({
-        ...record.toObject(),
-        studentName: record.student_id.name,
-      })),
-    )
+    const { schoolId } = req.params;
+    let query = { school_id: schoolId };
+    // Проверка прав: school_admin видит только свою школу
+    if (req.user.role === 'school_admin' && req.user.school_id !== schoolId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const events = await Event.find(query).sort({ date: -1 });
+    console.log(`Fetched events for school ${schoolId}:`, events);
+    res.json(events);
   } catch (err) {
-    console.error("Error fetching attendance by student:", err.message, err.stack)
-    res.status(500).json({ error: "Error fetching attendance by student", details: err.message })
+    console.error('Error fetching events by school:', err.message, err.stack);
+    res.status(500).json({ error: 'Error fetching events by school', details: err.message });
   }
-})
+});
+
+app.get('/attendance/event/:eventName', authMiddleware, async (req, res) => {
+  try {
+    let query = { event_name: req.params.eventName };
+    if (req.user.role === 'school_admin') {
+      const schoolStudents = await Student.find({ school_id: req.user.school_id }).select('_id');
+      query.student_id = { $in: schoolStudents.map(s => s._id) };
+    } else if (req.query.school_id) {
+      const schoolStudents = await Student.find({ school_id: req.query.school_id }).select('_id');
+      query.student_id = { $in: schoolStudents.map(s => s._id) };
+    }
+    const records = await AttendanceRecord.find(query)
+      .populate('student_id', 'name group course')
+      .sort({ timestamp: -1 });
+    res.json(records.map(record => ({
+      ...record.toObject(),
+      studentName: record.student_id.name,
+    })));
+  } catch (err) {
+    console.error('Error fetching attendance by event:', err.message, err.stack);
+    res.status(500).json({ error: 'Error fetching attendance by event', details: err.message });
+  }
+});
+
+app.get('/attendance/student/:studentId', authMiddleware, async (req, res) => {
+  try {
+    let query = { student_id: req.params.studentId };
+    if (req.user.role === 'school_admin') {
+      const schoolStudents = await Student.find({ school_id: req.user.school_id }).select('_id');
+      if (!schoolStudents.some(s => s._id.toString() === req.params.studentId)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    } else if (req.query.school_id) {
+      const schoolStudents = await Student.find({ school_id: req.query.school_id }).select('_id');
+      if (!schoolStudents.some(s => s._id.toString() === req.params.studentId)) {
+        return res.status(404).json({ error: 'Student not found in school' });
+      }
+    }
+    const records = await AttendanceRecord.find(query)
+      .populate('student_id', 'name')
+      .sort({ timestamp: -1 });
+    res.json(records.map(record => ({
+      ...record.toObject(),
+      studentName: record.student_id.name,
+    })));
+  } catch (err) {
+    console.error('Error fetching attendance by student:', err.message, err.stack);
+    res.status(500).json({ error: 'Error fetching attendance by student', details: err.message });
+  }
+});
 
 app.post("/attendance", authMiddleware, roleMiddleware(["teacher", "school_admin", "main_admin"]), async (req, res) => {
   try {
@@ -620,6 +685,17 @@ app.get("/api/analytics", authMiddleware, roleMiddleware(["main_admin"]), async 
     res.status(500).json({ error: "Error fetching analytics", details: err.message })
   }
 })
+
+app.get('/api/schools/:id', authMiddleware, roleMiddleware(['main_admin']), async (req, res) => {
+  try {
+    const school = await School.findById(req.params.id);
+    if (!school) return res.status(404).json({ error: 'School not found' });
+    res.json(school);
+  } catch (err) {
+    console.error('Error fetching school:', err.message, err.stack);
+    res.status(500).json({ error: 'Error fetching school', details: err.message });
+  }
+});
 
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`))
