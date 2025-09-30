@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RotateCcw, Flashlight, FlashlightOff } from "lucide-react";
-import { addAttendanceRecord, getStudentByQRCode, checkAttendanceExists } from "@/lib/database";
+import { addAttendanceRecord, getStudentByqr_code as getStudentByQRCode, checkAttendanceExists } from "@/lib/database";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, XCircle } from "lucide-react";
@@ -99,6 +99,20 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
 
   const handleScan = async (data: string) => {
     try {
+      const token = localStorage.getItem("token");
+      console.log("Token for scan:", token ? token.slice(0, 10) + "..." : "No token");
+      if (!token) {
+        setScanResult({
+          success: false,
+          message: "Токен отсутствует. Пожалуйста, войдите снова.",
+          timestamp: new Date(),
+        });
+        toast.error("Токен отсутствует. Пожалуйста, войдите снова.");
+        // Перенаправление на страницу логина
+        window.location.href = "/login";
+        return;
+      }
+  
       if (!selectedEvent) {
         setScanResult({
           success: false,
@@ -109,8 +123,8 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
         setScanning(true);
         return;
       }
-
-      const student = await getStudentByQRCode(data);
+  
+      const student = await getStudentByQRCode(data, token); // Используем правильное имя функции
       if (!student) {
         setScanResult({
           success: false,
@@ -121,9 +135,9 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
         setScanning(true);
         return;
       }
-
+  
       console.log("Fetched student:", student);
-      const attendanceExists = await checkAttendanceExists(student.id, selectedEvent.name);
+      const attendanceExists = await checkAttendanceExists(student.id, selectedEvent.name, token);
       console.log("Attendance check result:", attendanceExists);
       if (attendanceExists) {
         setScanResult({
@@ -135,15 +149,18 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
         setScanning(true);
         return;
       }
-
-      const attendanceRecord = await addAttendanceRecord({
-        student_id: student.id,
-        event_name: selectedEvent.name,
-        scanned_by: "scanner",
-        studentName: student.name,
-        timestamp: new Date(),
-      });
-
+  
+      const attendanceRecord = await addAttendanceRecord(
+        {
+          student_id: student.id,
+          event_name: selectedEvent.name,
+          scanned_by: "scanner",
+          studentName: student.name,
+          timestamp: new Date(),
+        },
+        token
+      );
+  
       if (attendanceRecord) {
         setScanResult({
           success: true,
@@ -164,9 +181,9 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
         toast.error("Ошибка при отметке посещения");
       }
     } catch (error: any) {
-      console.error("QR scan error:", error.name, error.message, error.stack);
+      console.error("QR scan error:", error.message, error.stack);
       const message = error.message.includes("unique_student_event")
-        ? `Посещение для этого студента уже отмечено для ${selectedEvent.name}`
+        ? `Посещение для этого студента уже отмечено для ${selectedEvent?.name || "мероприятия"}`
         : error.message || "Ошибка при обработке QR-кода";
       setScanResult({
         success: false,

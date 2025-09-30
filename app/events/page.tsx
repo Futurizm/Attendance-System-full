@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Calendar, Users, Trash2 } from "lucide-react";
+import { Plus, Calendar, Users, Trash2, LogOut } from "lucide-react";
 import { getAllEvents, getAttendanceByEvent, addEvent, toggleEventActive, deleteAttendanceRecord } from "@/lib/database";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -16,6 +17,7 @@ import type { Event, AttendanceRecord } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function EventsPage() {
+  const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
   const [attendanceMap, setAttendanceMap] = useState<Map<string, AttendanceRecord[]>>(new Map());
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -31,14 +33,20 @@ export default function EventsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
     const fetchEventsAndAttendance = async () => {
       setIsLoading(true);
       try {
-        const fetchedEvents = await getAllEvents();
-        console.log('Fetched events:', fetchedEvents); // Debug log
+        const fetchedEvents = await getAllEvents(token);
+        console.log("Fetched events:", fetchedEvents);
         const attendancePromises = fetchedEvents.map(async (event) => ({
           eventName: event.name,
-          attendance: await getAttendanceByEvent(event.name),
+          attendance: await getAttendanceByEvent(event.name, token),
         }));
         const attendanceData = await Promise.all(attendancePromises);
         const newAttendanceMap = new Map(attendanceData.map(({ eventName, attendance }) => [eventName, attendance]));
@@ -56,13 +64,18 @@ export default function EventsPage() {
       }
     };
     fetchEventsAndAttendance();
-  }, []);
+  }, [router]);
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (isSubmitting) return;
     setIsSubmitting(true);
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
     console.log("handleCreateEvent called with:", newEvent);
     try {
       const eventToAdd = {
@@ -71,7 +84,7 @@ export default function EventsPage() {
         description: newEvent.description,
         is_active: newEvent.is_active,
       };
-      const addedEvent = await addEvent(eventToAdd);
+      const addedEvent = await addEvent(eventToAdd, token);
       if (addedEvent) {
         console.log("Event added:", addedEvent);
         setEvents((prev) => {
@@ -102,9 +115,14 @@ export default function EventsPage() {
   };
 
   const handleToggleEventActive = async (eventId: string, currentActive: boolean) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
     console.log(`Attempting to toggle event ${eventId} to ${!currentActive}`);
-    if (!eventId || eventId === 'undefined') {
-      console.error('Invalid eventId:', eventId);
+    if (!eventId || eventId === "undefined") {
+      console.error("Invalid eventId:", eventId);
       toast({
         title: "Ошибка",
         description: "Недействительный ID мероприятия",
@@ -113,7 +131,7 @@ export default function EventsPage() {
       return;
     }
     try {
-      const success = await toggleEventActive(eventId, !currentActive);
+      const success = await toggleEventActive(eventId, !currentActive, token);
       console.log("toggleEventActive result:", success);
       if (success) {
         setEvents((prev) =>
@@ -139,8 +157,13 @@ export default function EventsPage() {
   };
 
   const handleDeleteAttendance = async (recordId: string, eventName: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
     try {
-      const success = await deleteAttendanceRecord(recordId);
+      const success = await deleteAttendanceRecord(recordId, token);
       if (success) {
         setAttendanceMap((prev) => {
           const newMap = new Map(prev);
@@ -165,8 +188,13 @@ export default function EventsPage() {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    router.push("/login");
+  };
+
   const openDetailsDialog = (event: Event) => {
-    console.log('Opening details for event:', event); // Debug log
+    console.log("Opening details for event:", event);
     setSelectedEvent(event);
     setIsDetailsDialogOpen(true);
   };
@@ -180,74 +208,80 @@ export default function EventsPage() {
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Управление мероприятиями</h1>
             <p className="text-muted-foreground">Создавайте и управляйте внеклассными мероприятиями</p>
           </div>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="w-full sm:w-auto" disabled={isSubmitting}>
-                <Plus className="h-4 w-4 mr-2" />
-                Создать мероприятие
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Создать новое мероприятие</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleCreateEvent} className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Название</Label>
-                  <Input
-                    id="name"
-                    value={newEvent.name}
-                    onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="date">Дата</Label>
-                  <Input
-                    id="date"
-                    type="datetime-local"
-                    value={newEvent.date}
-                    onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="description">Описание</Label>
-                  <Textarea
-                    id="description"
-                    value={newEvent.description}
-                    onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="is_active">Активно</Label>
-                  <Input
-                    id="is_active"
-                    type="checkbox"
-                    checked={newEvent.is_active}
-                    onChange={(e) => setNewEvent({ ...newEvent, is_active: e.target.checked })}
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsCreateDialogOpen(false)}
-                    disabled={isSubmitting}
-                  >
-                    Отмена
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Создание..." : "Создать"}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <div className="flex gap-2">
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="w-full sm:w-auto" disabled={isSubmitting}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Создать мероприятие
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Создать новое мероприятие</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleCreateEvent} className="space-y-4">
+                  <div>
+                    <Label htmlFor="name">Название</Label>
+                    <Input
+                      id="name"
+                      value={newEvent.name}
+                      onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
+                      required
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="date">Дата</Label>
+                    <Input
+                      id="date"
+                      type="datetime-local"
+                      value={newEvent.date}
+                      onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
+                      required
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Описание</Label>
+                    <Textarea
+                      id="description"
+                      value={newEvent.description}
+                      onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="is_active">Активно</Label>
+                    <Input
+                      id="is_active"
+                      type="checkbox"
+                      checked={newEvent.is_active}
+                      onChange={(e) => setNewEvent({ ...newEvent, is_active: e.target.checked })}
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsCreateDialogOpen(false)}
+                      disabled={isSubmitting}
+                    >
+                      Отмена
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? "Создание..." : "Создать"}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+            <Button variant="outline" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Выйти
+            </Button>
+          </div>
         </div>
 
         {/* Events List */}

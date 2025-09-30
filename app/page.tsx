@@ -1,15 +1,59 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, QrCode, Calendar, BarChart3, FileSpreadsheet, Settings } from "lucide-react";
+import { Users, QrCode, Calendar, BarChart3, FileSpreadsheet, Settings, LogOut } from "lucide-react";
 import { AttendanceDashboard } from "@/components/attendance-dashboard";
 import { getAllAttendanceRecords, getAllStudents, getAllEvents, getActiveEvent } from "@/lib/database";
 import Link from "next/link";
 
-export default async function HomePage() {
-  const attendanceRecords = await getAllAttendanceRecords();
-  const students = await getAllStudents();
-  const events = await getAllEvents();
-  const activeEvent = await getActiveEvent();
+export default function HomePage() {
+  const router = useRouter();
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [activeEvent, setActiveEvent] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [fetchedAttendance, fetchedStudents, fetchedEvents, fetchedActiveEvent] = await Promise.all([
+          getAllAttendanceRecords(token),
+          getAllStudents(token),
+          getAllEvents(token),
+          getActiveEvent(token),
+        ]);
+        setAttendanceRecords(fetchedAttendance);
+        setStudents(fetchedStudents);
+        setEvents(fetchedEvents);
+        setActiveEvent(fetchedActiveEvent);
+      } catch (error: any) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [router]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    router.push("/login");
+  };
+
+  if (loading) {
+    return <div className="min-h-screen bg-background flex items-center justify-center">Загрузка...</div>;
+  }
 
   const todayAttendance = attendanceRecords.filter(
     (record) => record.timestamp.toDateString() === new Date().toDateString()
@@ -24,8 +68,16 @@ export default async function HomePage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg border p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Система контроля посещаемости</h1>
-        <p className="text-gray-600">Управление посещаемостью внеклассных мероприятий колледжа ИТ с помощью QR-кодов</p>
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Система контроля посещаемости</h1>
+            <p className="text-gray-600">Управление посещаемостью внеклассных мероприятий колледжа ИТ с помощью QR-кодов</p>
+          </div>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 mr-2" />
+            Выйти
+          </Button>
+        </div>
       </div>
 
       {/* Quick Stats */}

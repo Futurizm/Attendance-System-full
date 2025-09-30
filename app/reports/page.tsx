@@ -1,40 +1,87 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { LogOut } from "lucide-react";
 import { GoogleSheetsExport } from "@/components/google-sheets-export";
 import { getAllAttendanceRecords, getAllStudents, getAllEvents } from "@/lib/database";
 import { BarChart3, Users, Calendar } from "lucide-react";
 import Link from "next/link";
 import type { AttendanceRecord, Student, Event } from "@/lib/types";
 
-export default async function ReportsPage() {
-  // Fetch data
-  const attendanceRecords = await getAllAttendanceRecords();
-  const students = await getAllStudents();
-  const events = await getAllEvents();
+export default function ReportsPage() {
+  const router = useRouter();
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Calculate statistics
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [fetchedAttendance, fetchedStudents, fetchedEvents] = await Promise.all([
+          getAllAttendanceRecords(token),
+          getAllStudents(token),
+          getAllEvents(token),
+        ]);
+        setAttendanceRecords(fetchedAttendance);
+        setStudents(fetchedStudents);
+        setEvents(fetchedEvents);
+      } catch (error: any) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [router]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    router.push("/login");
+  };
+
+  if (loading) {
+    return <div className="min-h-screen bg-background flex items-center justify-center">Загрузка...</div>;
+  }
+
   const todayAttendance = attendanceRecords.filter(
     (record) => record.timestamp.toDateString() === new Date().toDateString()
   );
 
   const attendanceByEvent = events.map((event) => ({
     event,
-    count: attendanceRecords.filter((record) => record.eventName === event.name).length,
+    count: attendanceRecords.filter((record) => record.event_name === event.name).length,
   }));
 
   const attendanceByStudent = students.map((student) => ({
     student,
-    count: attendanceRecords.filter((record) => record.studentId === student.id).length,
+    count: attendanceRecords.filter((record) => record.student_id === student.id).length,
   }));
 
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Отчеты и экспорт</h1>
-          <p className="text-muted-foreground">Просматривайте статистику посещаемости и экспортируйте данные</p>
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Отчеты и экспорт</h1>
+            <p className="text-muted-foreground">Просматривайте статистику посещаемости и экспортируйте данные</p>
+          </div>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 mr-2" />
+            Выйти
+          </Button>
         </div>
 
         {/* Statistics Overview */}
@@ -107,7 +154,7 @@ export default async function ReportsPage() {
                       <div className="font-medium truncate">{event.name}</div>
                       <div className="text-sm text-muted-foreground flex items-center gap-2">
                         <span>{event.date.toLocaleDateString("ru-RU")}</span>
-                        {event.isActive && <Badge variant="default">Активно</Badge>}
+                        {event.is_active && <Badge variant="default">Активно</Badge>}
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
@@ -142,7 +189,7 @@ export default async function ReportsPage() {
                     >
                       <div className="min-w-0">
                         <div className="font-medium truncate">{record.studentName}</div>
-                        <div className="text-sm text-muted-foreground truncate">{record.eventName}</div>
+                        <div className="text-sm text-muted-foreground truncate">{record.event_name}</div>
                       </div>
                       <div className="text-sm text-muted-foreground flex-shrink-0">
                         {record.timestamp.toLocaleString("ru-RU")}

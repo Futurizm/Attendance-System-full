@@ -1,59 +1,76 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Users, Clock } from "lucide-react";
+import { Calendar, Users, Clock, LogOut } from "lucide-react";
 import Link from "next/link";
 import { QRScanner } from "@/components/qr-scanner";
 import type { Event, AttendanceRecord } from "@/lib/types";
 import { toast } from "sonner";
+import { getActiveEvents, getAttendanceByEvent } from "@/lib/database";
 
 export default function ScannerPage() {
+  const router = useRouter();
   const [activeEvents, setActiveEvents] = useState<Event[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
-    try {
-      const response = await fetch("/api/scanner-data");
-      const { success, activeEvents, records, error } = await response.json();
-
-      if (!success) {
-        throw new Error(error || "Failed to fetch data");
-      }
-
-      console.log("ScannerPage: Fetched active events:", activeEvents);
-      setActiveEvents(activeEvents);
-
-      // Set the first active event as default if none selected
-      if (activeEvents.length > 0 && !selectedEvent) {
-        setSelectedEvent(activeEvents[0].id);
-      }
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayRecords = records.filter(
-        (record: AttendanceRecord) => new Date(record.timestamp).toDateString() === today.toDateString(),
-      );
-      setTodayAttendance(todayRecords);
-    } catch (error: any) {
-      console.error("Error loading data:", error.message);
-      toast.error("Ошибка при загрузке данных: " + (error.message || "Неизвестная ошибка"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const loadData = async () => {
+      try {
+        const activeEvents = await getActiveEvents(token);
+        console.log("ScannerPage: Fetched active events:", activeEvents);
+        setActiveEvents(activeEvents);
+
+        if (activeEvents.length > 0 && !selectedEvent) {
+          setSelectedEvent(activeEvents[0].id);
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const attendancePromises = activeEvents.map(async (event) => ({
+          eventName: event.name,
+          records: await getAttendanceByEvent(event.name, token),
+        }));
+        const attendanceData = await Promise.all(attendancePromises);
+        const allRecords = attendanceData.flatMap(({ records }) => records);
+        const todayRecords = allRecords.filter(
+          (record) => new Date(record.timestamp).toDateString() === today.toDateString()
+        );
+        setTodayAttendance(todayRecords);
+      } catch (error: any) {
+        console.error("Error loading data:", error.message);
+        toast.error("Ошибка при загрузке данных: " + (error.message || "Неизвестная ошибка"));
+      } finally {
+        setLoading(false);
+      }
+    };
     loadData();
-  }, []);
+  }, [router, selectedEvent]);
 
   const handleScanSuccess = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
     loadData(); // Refresh attendance records after a successful scan
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    router.push("/login");
   };
 
   if (loading) {
@@ -64,9 +81,15 @@ export default function ScannerPage() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Сканер посещаемости</h1>
-          <p className="text-muted-foreground">Отметьте посещение студентов сканированием QR-кодов</p>
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Сканер посещаемости</h1>
+            <p className="text-muted-foreground">Отметьте посещение студентов сканированием QR-кодов</p>
+          </div>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 mr-2" />
+            Выйти
+          </Button>
         </div>
 
         {/* Active Events Selection */}

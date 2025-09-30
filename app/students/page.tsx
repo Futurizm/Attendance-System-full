@@ -1,14 +1,15 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Edit, Trash2, Users } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Users, LogOut } from "lucide-react";
 import { getAllStudents, addStudent, updateStudent, deleteStudent } from "@/lib/database";
 import { QRCodeDisplay } from "@/components/qr-code-display";
 import { BulkQRGenerator } from "@/components/bulk-qr-generator";
-import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import type { Student } from "@/lib/types";
 import {
@@ -43,12 +44,13 @@ const studentSchema = z.object({
   group: z.string().min(1, "Группа обязательна"),
   course: z.number().int().min(1).max(4, "Курс от 1 до 4"),
   specialty: z.string().min(1, "Специальность обязательна"),
-  qr_code: z.string().min(1, "QR-код обязателен"), // Изменено с qrCode на qr_code
+  qr_code: z.string().min(1, "QR-код обязателен"),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
 
 export default function StudentsPage() {
+  const router = useRouter();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -64,14 +66,19 @@ export default function StudentsPage() {
       group: "",
       course: 1,
       specialty: "",
-      qr_code: "", // Изменено с qrCode на qr_code
+      qr_code: "",
     },
   });
 
   const loadStudents = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
     try {
       setLoading(true);
-      const data = await getAllStudents();
+      const data = await getAllStudents(token);
       console.log("Loaded students:", data);
       setStudents(data);
     } catch (error: any) {
@@ -84,7 +91,7 @@ export default function StudentsPage() {
 
   useEffect(() => {
     loadStudents();
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const newQrCode = crypto.randomUUID();
@@ -94,7 +101,7 @@ export default function StudentsPage() {
         group: editingStudent.group,
         course: editingStudent.course,
         specialty: editingStudent.specialty,
-        qr_code: editingStudent.qr_code, // Изменено с qrCode на qr_code
+        qr_code: editingStudent.qr_code,
       });
       console.log("Editing student QR:", editingStudent.qr_code);
     } else {
@@ -103,13 +110,12 @@ export default function StudentsPage() {
         group: "",
         course: 1,
         specialty: "",
-        qr_code: newQrCode, // Изменено с qrCode на qr_code
+        qr_code: newQrCode,
       });
       console.log("New QR Code generated:", newQrCode);
     }
   }, [editingStudent, form]);
 
-  // Generate QR code when modal opens or qr_code changes
   useEffect(() => {
     if (isAddOpen && form.watch("qr_code")) {
       setQrError(null);
@@ -130,17 +136,22 @@ export default function StudentsPage() {
   }, [isAddOpen, form.watch("qr_code")]);
 
   const onSubmit = async (data: StudentFormData) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
     try {
       console.log("Submitting student data:", data);
       if (editingStudent) {
-        const updatedStudent = await updateStudent(editingStudent.id, data);
+        const updatedStudent = await updateStudent(editingStudent.id, data, token);
         if (updatedStudent) {
           toast.success(`Студент ${data.name} успешно обновлен`);
         } else {
           throw new Error("Failed to update student");
         }
       } else {
-        const newStudent = await addStudent(data);
+        const newStudent = await addStudent(data, token);
         if (newStudent) {
           toast.success(`Студент ${data.name} успешно добавлен`);
         } else {
@@ -154,7 +165,7 @@ export default function StudentsPage() {
         group: "",
         course: 1,
         specialty: "",
-        qr_code: crypto.randomUUID(), // Изменено с qrCode на qr_code
+        qr_code: crypto.randomUUID(),
       });
       setQrCodeURL("");
       await loadStudents();
@@ -165,9 +176,14 @@ export default function StudentsPage() {
   };
 
   const handleDelete = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
     if (deletingStudent) {
       try {
-        const success = await deleteStudent(deletingStudent.id);
+        const success = await deleteStudent(deletingStudent.id, token);
         if (success) {
           toast.success(`Студент ${deletingStudent.name} успешно удален`);
           setDeletingStudent(null);
@@ -180,6 +196,11 @@ export default function StudentsPage() {
         toast.error("Ошибка при удалении студента: " + (error.message || "Неизвестная ошибка"));
       }
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    router.push("/login");
   };
 
   if (loading) {
@@ -281,7 +302,7 @@ export default function StudentsPage() {
                         <p className="text-gray-500 text-sm">QR-код будет сгенерирован после заполнения формы</p>
                       )}
                     </div>
-                    <Input id="qr_code" {...form.register("qr_code")} type="hidden" /> {/* Изменено с qrCode на qr_code */}
+                    <Input id="qr_code" {...form.register("qr_code")} type="hidden" />
                   </div>
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
@@ -292,6 +313,10 @@ export default function StudentsPage() {
                 </form>
               </DialogContent>
             </Dialog>
+            <Button variant="outline" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Выйти
+            </Button>
           </div>
         </div>
       </div>

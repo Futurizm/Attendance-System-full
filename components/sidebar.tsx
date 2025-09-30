@@ -1,24 +1,54 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { cn } from "@/lib/utils"
-import { Home, Users, QrCode, Calendar, BarChart3, FileText, Menu, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { Home, Users, QrCode, Calendar, BarChart3, FileText, Menu, X, School, UserCog } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import {jwtDecode} from "jwt-decode";
 
-const navigation = [
-  { name: "Главная", href: "/", icon: Home },
-  { name: "Студенты", href: "/students", icon: Users },
-  { name: "Сканер QR", href: "/scanner", icon: QrCode },
-  { name: "Мероприятия", href: "/events", icon: Calendar },
-  { name: "Аналитика", href: "/reports", icon: BarChart3 },
-  { name: "Отчеты", href: "/reports", icon: FileText },
-]
+const getNavigation = (role: string) => {
+  const baseNav = [
+    { name: "Главная", href: "/", icon: Home },
+    { name: "Студенты", href: "/students", icon: Users },
+    { name: "Сканер QR", href: "/scanner", icon: QrCode },
+    { name: "Мероприятия", href: "/events", icon: Calendar },
+    { name: "Аналитика", href: "/analytics", icon: BarChart3 },
+    { name: "Отчеты", href: "/reports", icon: FileText },
+  ];
+
+  if (role === "main_admin") {
+    return [
+      ...baseNav,
+      { name: "Школы", href: "/schools", icon: School },
+      { name: "Админы", href: "/admins", icon: UserCog },
+    ];
+  }
+
+  return baseNav;
+};
 
 export function Sidebar() {
-  const pathname = usePathname()
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const pathname = usePathname();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [role, setRole] = useState<string>("");
+  const [schoolId, setSchoolId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      try {
+        const decoded: any = jwtDecode(token);
+        setRole(decoded.role);
+        setSchoolId(decoded.school_id || null);
+      } catch (err) {
+        console.error("Error decoding token:", err);
+      }
+    }
+  }, []);
+
+  const navigation = getNavigation(role);
 
   return (
     <>
@@ -44,7 +74,7 @@ export function Sidebar() {
         className={cn(
           "fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 z-40 transform transition-transform duration-200 ease-in-out",
           "lg:translate-x-0",
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
         <div className="flex flex-col h-full">
@@ -64,7 +94,7 @@ export function Sidebar() {
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-2">
             {navigation.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = pathname === item.href;
               return (
                 <Link
                   key={item.name}
@@ -72,13 +102,13 @@ export function Sidebar() {
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={cn(
                     "flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                    isActive ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100",
+                    isActive ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"
                   )}
                 >
                   <item.icon className="w-5 h-5" />
                   <span>{item.name}</span>
                 </Link>
-              )
+              );
             })}
           </nav>
 
@@ -89,5 +119,5 @@ export function Sidebar() {
         </div>
       </div>
     </>
-  )
+  );
 }
