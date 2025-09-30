@@ -76,7 +76,7 @@ export function AttendanceDashboard({ attendanceRecords, students, events }: Att
     if (selectedClass !== "all") {
       filteredStudents = students.filter((student) => student.group === selectedClass);
       filteredRecords = filteredRecords.filter((record) =>
-        filteredStudents.some((student) => student.id === record.studentId),
+        filteredStudents.some((student) => student.id === record.student_id),
       );
     }
 
@@ -84,12 +84,12 @@ export function AttendanceDashboard({ attendanceRecords, students, events }: Att
 
     const eventAttendance = events.map((event) => ({
       event: event.name,
-      count: filteredRecords.filter((record) => record.eventName === event.name).length,
+      count: filteredRecords.filter((record) => record.event_name === event.name).length,
     }));
 
     const studentAttendance = filteredStudents.map((student) => ({
       student: student.name,
-      count: filteredRecords.filter((record) => record.studentId === student.id).length,
+      count: filteredRecords.filter((record) => record.student_id === student.id).length,
     }));
 
     const topEvent = eventAttendance.reduce(
@@ -142,12 +142,12 @@ export function AttendanceDashboard({ attendanceRecords, students, events }: Att
     if (selectedClass !== "all") {
       const filteredStudents = students.filter((student) => student.group === selectedClass);
       filteredRecords = filteredRecords.filter((record) =>
-        filteredStudents.some((student) => student.id === record.studentId),
+        filteredStudents.some((student) => student.id === record.student_id),
       );
     }
 
     return events.map((event) => {
-      const count = filteredRecords.filter((record) => record.eventName === event.name).length;
+      const count = filteredRecords.filter((record) => record.event_name === event.name).length;
       return {
         name: event.name.length > 15 ? event.name.substring(0, 15) + "..." : event.name,
         value: count,
@@ -181,7 +181,7 @@ export function AttendanceDashboard({ attendanceRecords, students, events }: Att
     if (selectedClass !== "all") {
       const filteredStudents = students.filter((student) => student.group === selectedClass);
       filteredRecords = attendanceRecords.filter((record) =>
-        filteredStudents.some((student) => student.id === record.studentId),
+        filteredStudents.some((student) => student.id === record.student_id),
       );
     }
 
@@ -383,7 +383,7 @@ export function AttendanceDashboard({ attendanceRecords, students, events }: Att
               {students
                 .map((student) => ({
                   ...student,
-                  attendanceCount: attendanceRecords.filter((record) => record.studentId === student.id).length,
+                  attendanceCount: attendanceRecords.filter((record) => record.student_id === student.id).length,
                 }))
                 .sort((a, b) => b.attendanceCount - a.attendanceCount)
                 .slice(0, 5)
@@ -422,7 +422,7 @@ export function AttendanceDashboard({ attendanceRecords, students, events }: Att
                     <div key={record.id} className="flex items-center justify-between p-2 border rounded">
                       <div>
                         <div className="font-medium">{record.studentName}</div>
-                        <div className="text-sm text-muted-foreground">{record.eventName}</div>
+                        <div className="text-sm text-muted-foreground">{record.event_name}</div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-medium">

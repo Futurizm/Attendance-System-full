@@ -11,7 +11,7 @@ import Link from "next/link";
 import { QRScanner } from "@/components/qr-scanner";
 import type { Event, AttendanceRecord } from "@/lib/types";
 import { toast } from "sonner";
-import { getActiveEvents, getAttendanceByEvent } from "@/lib/database";
+import { getActiveEvents, getAttendanceByEvent, getStudentByqr_code, addAttendanceRecord, checkAttendanceExists } from "@/lib/database";
 
 export default function ScannerPage() {
   const router = useRouter();
@@ -20,52 +20,98 @@ export default function ScannerPage() {
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const loadData = async (token: string) => {
+    try {
+      setLoading(true);
+      const activeEvents = await getActiveEvents(token);
+      console.log("ScannerPage: Fetched active events:", activeEvents);
+      setActiveEvents(activeEvents);
+
+      if (activeEvents.length > 0 && !selectedEvent) {
+        setSelectedEvent(activeEvents[0].id);
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const attendancePromises = activeEvents.map(async (event) => ({
+        eventName: event.name,
+        records: await getAttendanceByEvent(event.name, token),
+      }));
+      const attendanceData = await Promise.all(attendancePromises);
+      const allRecords = attendanceData.flatMap(({ records }) => records);
+      const todayRecords = allRecords.filter(
+        (record) => new Date(record.timestamp).toDateString() === today.toDateString()
+      );
+      setTodayAttendance(todayRecords);
+    } catch (error: any) {
+      console.error("Error loading data:", error.message, error.stack);
+      toast.error("Ошибка при загрузке данных: " + (error.message || "Неизвестная ошибка"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
       router.push("/login");
       return;
     }
-
-    const loadData = async () => {
-      try {
-        const activeEvents = await getActiveEvents(token);
-        console.log("ScannerPage: Fetched active events:", activeEvents);
-        setActiveEvents(activeEvents);
-
-        if (activeEvents.length > 0 && !selectedEvent) {
-          setSelectedEvent(activeEvents[0].id);
-        }
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const attendancePromises = activeEvents.map(async (event) => ({
-          eventName: event.name,
-          records: await getAttendanceByEvent(event.name, token),
-        }));
-        const attendanceData = await Promise.all(attendancePromises);
-        const allRecords = attendanceData.flatMap(({ records }) => records);
-        const todayRecords = allRecords.filter(
-          (record) => new Date(record.timestamp).toDateString() === today.toDateString()
-        );
-        setTodayAttendance(todayRecords);
-      } catch (error: any) {
-        console.error("Error loading data:", error.message);
-        toast.error("Ошибка при загрузке данных: " + (error.message || "Неизвестная ошибка"));
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
+    loadData(token);
   }, [router, selectedEvent]);
 
-  const handleScanSuccess = () => {
+  const handleScanSuccess = async (qrData: string) => {
     const token = localStorage.getItem("token");
     if (!token) {
       router.push("/login");
       return;
     }
-    loadData(); // Refresh attendance records after a successful scan
+    if (!selectedEvent) {
+      toast.error("Пожалуйста, выберите мероприятие перед сканированием");
+      return;
+    }
+
+    try {
+      const selectedEventObj = activeEvents.find((e) => e.id === selectedEvent);
+      if (!selectedEventObj) {
+        throw new Error("Выбранное мероприятие не найдено");
+      }
+
+      // Fetch student by QR code
+      const student = await getStudentByqr_code(qrData, token);
+      if (!student) {
+        throw new Error("Студент не найден по QR-коду");
+      }
+
+      // Check if attendance already exists
+      const attendanceExists = await checkAttendanceExists(student.id, selectedEventObj.name, token);
+      if (attendanceExists) {
+        toast.error(`Посещение для ${student.name} уже отмечено для ${selectedEventObj.name}`);
+        return;
+      }
+
+      // Add attendance record
+      const record: Omit<AttendanceRecord, "id"> = {
+        student_id: student.id,
+        event_name: selectedEventObj.name,
+        timestamp: new Date(),
+        scanned_by: "scanner", // Adjust based on your auth logic (e.g., user ID from token)
+        studentName: student.name,
+      };
+      await addAttendanceRecord(record, token);
+      toast.success(`Посещение отмечено для ${student.name} на ${selectedEventObj.name}`);
+      await loadData(token); // Refresh attendance records
+    } catch (error: any) {
+      console.error("Scan error:", error.message, error.stack);
+      const message = error.message.includes("unique_student_event")
+        ? `Посещение для этого студента уже отмечено для ${activeEvents.find((e) => e.id === selectedEvent)?.name || "мероприятия"}`
+        : error.message.includes("Student not found")
+        ? "Студент не найден по этому QR-коду"
+        : error.message.includes("Invalid student_id")
+        ? "Недействительный идентификатор студента"
+        : "Ошибка при обработке QR-кода";
+      toast.error(message);
+    }
   };
 
   const handleLogout = () => {
