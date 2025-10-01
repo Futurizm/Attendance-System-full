@@ -2,20 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { jwtDecode } from "jwt-decode";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, Users } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { getMyChildren, getSchoolById } from "@/lib/database";
-import type { School, Student } from "@/lib/types";
-
-interface ParentProfile {
-  email: string;
-  school_id: string;
-  userId: string;
-}
+import { getCurrentUser, getSchoolById, getMyChildren } from "@/lib/database";
+import type { School, Student, ParentProfile } from "@/lib/types";
 
 export default function ParentProfilePage() {
   const router = useRouter();
@@ -35,35 +28,10 @@ export default function ParentProfilePage() {
       return;
     }
     setToken(t);
-    try {
-      const decoded: any = jwtDecode(t);
-      console.log("Decoded token:", decoded);
-      const currentTime = Math.floor(Date.now() / 1000);
-      if (decoded.exp < currentTime) {
-        toast.error("Срок действия токена истёк. Войдите снова.");
-        localStorage.removeItem("token");
-        router.push("/login");
-        return;
-      }
-      if (decoded.role !== "parent") {
-        toast.error("Доступ запрещён для этой роли");
-        router.push("/");
-        return;
-      }
-      setParent({
-        email: decoded.email,
-        school_id: decoded.school_id,
-        userId: decoded.userId,
-      });
-      fetchData(decoded.school_id, decoded.userId, t);
-    } catch (err) {
-      console.error("Error decoding token:", err);
-      toast.error("Ошибка декодирования токена");
-      router.push("/login");
-    }
+    fetchData(t);
   }, [router]);
 
-  const fetchData = async (schoolId: string, userId: string, t: string) => {
+  const fetchData = async (t: string) => {
     setLoading(true);
     setError(null);
     const timeout = setTimeout(() => {
@@ -73,18 +41,43 @@ export default function ParentProfilePage() {
     }, 10000);
     try {
       console.log("Starting fetchData...");
-      const schoolData = await getSchoolById(schoolId, t);
-      console.log("School data received:", schoolData);
-      setSchool(schoolData);
+      // Fetch current user data
+      const user = await getCurrentUser(t);
+      console.log("User data received:", user);
+      if (!user) {
+        throw new Error("Не удалось получить данные пользователя");
+      }
+      if (user.role !== "parent") {
+        toast.error("Доступ запрещён для этой роли");
+        router.push("/");
+        return;
+      }
+      setParent({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        school_id: user.school_id,
+        name: user.name,
+        createdAt: user.createdAt,
+        children: user.children,
+      });
 
+      // Fetch school data
+      if (user.school_id) {
+        const schoolData = await getSchoolById(user.school_id, t);
+        console.log("School data received:", schoolData);
+        setSchool(schoolData);
+      } else {
+        console.warn("No school_id found for user");
+      }
+
+      // Fetch children data
       const childrenData = await getMyChildren(t);
       console.log("Children data received:", childrenData);
       setChildren(childrenData || []); // Ensure children is an array
     } catch (err: any) {
       console.error("Error fetching parent profile data:", {
         message: err.message,
-        schoolId,
-        userId,
         token: t.slice(0, 10) + "...",
       });
       setError(err.message);
@@ -102,8 +95,8 @@ export default function ParentProfilePage() {
   };
 
   const handleRetry = () => {
-    if (parent && token) {
-      fetchData(parent.school_id, parent.userId, token);
+    if (token) {
+      fetchData(token);
     }
   };
 
@@ -145,8 +138,11 @@ export default function ParentProfilePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            <p><strong>Имя:</strong> {parent.name}</p>
             <p><strong>Email:</strong> {parent.email}</p>
+            <p><strong>Роль:</strong> Родитель</p>
             <p><strong>Школа:</strong> {school ? school.name : "Не удалось загрузить данные школы"}</p>
+            <p><strong>Дата регистрации:</strong> {parent.createdAt.toLocaleDateString("ru-RU")}</p>
           </CardContent>
         </Card>
       </div>
@@ -163,10 +159,9 @@ export default function ParentProfilePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Имя</TableHead>
-                  <TableHead>Группа</TableHead>
-                  <TableHead>Курс</TableHead>
-                  <TableHead>Специальность</TableHead>
+                  <TableHead>ФИО</TableHead>
+                  <TableHead>Класс</TableHead>
+                  <TableHead>Секция</TableHead>
                   <TableHead>Школа</TableHead>
                 </TableRow>
               </TableHeader>
@@ -175,7 +170,6 @@ export default function ParentProfilePage() {
                   <TableRow key={child.id || child._id}>
                     <TableCell>{child.name}</TableCell>
                     <TableCell>{child.group || "N/A"}</TableCell>
-                    <TableCell>{child.course || "N/A"}</TableCell>
                     <TableCell>{child.specialty || "N/A"}</TableCell>
                     <TableCell>{school ? school.name : "Неизвестно"}</TableCell>
                   </TableRow>

@@ -183,7 +183,7 @@ export function QRScanner({ onScanSuccess, selectedEvent }: QRScannerProps) {
     } catch (error: any) {
       console.error("QR scan error:", error.message, error.stack);
       const message = error.message.includes("unique_student_event")
-        ? `Посещение для этого студента уже отмечено для ${selectedEvent?.name || "мероприятия"}`
+        ? `Посещение для этого школьника уже отмечено для ${selectedEvent?.name || "мероприятия"}`
         : error.message || "Ошибка при обработке QR-кода";
       setScanResult({
         success: false,

@@ -6,17 +6,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogOut } from "lucide-react";
-import { GoogleSheetsExport } from "@/components/google-sheets-export";
-import { getAllAttendanceRecords, getAllStudents, getAllEvents } from "@/lib/database";
+import { getAllAttendanceRecords, getAllStudents, getAllEvents, getAllUsers, getAllSchools } from "@/lib/database";
 import { BarChart3, Users, Calendar } from "lucide-react";
 import Link from "next/link";
-import type { AttendanceRecord, Student, Event } from "@/lib/types";
+import type { AttendanceRecord, Student, Event, User, School } from "@/lib/types";
+import * as XLSX from "xlsx";
 
 export default function ReportsPage() {
   const router = useRouter();
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [schools, setSchools] = useState<School[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,14 +31,18 @@ export default function ReportsPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [fetchedAttendance, fetchedStudents, fetchedEvents] = await Promise.all([
+        const [fetchedAttendance, fetchedStudents, fetchedEvents, fetchedUsers, fetchedSchools] = await Promise.all([
           getAllAttendanceRecords(token),
           getAllStudents(token),
           getAllEvents(token),
+          getAllUsers(token),
+          getAllSchools(token),
         ]);
         setAttendanceRecords(fetchedAttendance);
         setStudents(fetchedStudents);
         setEvents(fetchedEvents);
+        setUsers(fetchedUsers);
+        setSchools(fetchedSchools);
       } catch (error: any) {
         console.error("Error fetching data:", error);
       } finally {
@@ -68,6 +74,107 @@ export default function ReportsPage() {
     student,
     count: attendanceRecords.filter((record) => record.student_id === student.id).length,
   }));
+
+  const schoolAdmins = users.filter((u) => u.role === "school_admin");
+  const teachers = users.filter((u) => u.role === "teacher");
+  const parents = users.filter((u) => u.role === "parent");
+  const activeEvents = events.filter((e) => e.is_active);
+
+  const totalAttendance = attendanceRecords.length;
+  const totalPossible = students.length * activeEvents.length;
+  const overallAttendance = totalPossible > 0 ? ((totalAttendance / totalPossible) * 100).toFixed(2) : "0";
+
+  const schoolMap = new Map(schools.map((s) => [s.id, s.name]));
+
+  const handleExcelExport = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Summary sheet
+    const summaryData = [
+      ["Категория", "Количество"],
+      ["Админы школ", schoolAdmins.length],
+      ["Преподаватели", teachers.length],
+      ["Родители", parents.length],
+      ["Школьники", students.length],
+      ["Активные события", activeEvents.length],
+      ["Отметки", totalAttendance],
+      ["Общая посещаемость %", overallAttendance],
+    ];
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Сводка");
+
+    // School Admins sheet
+    const adminsData = schoolAdmins.map((u) => ({
+      ID: u.id,
+      Email: u.email,
+      Name: u.name,
+      School: u.school?.name || schoolMap.get(u.school_id || "") || "",
+      Created: u.createdAt.toLocaleDateString("ru-RU"),
+    }));
+    const wsAdmins = XLSX.utils.json_to_sheet(adminsData);
+    XLSX.utils.book_append_sheet(wb, wsAdmins, "Админы школ");
+
+    // Teachers sheet
+    const teachersData = teachers.map((u) => ({
+      ID: u.id,
+      Email: u.email,
+      Name: u.name,
+      School: u.school?.name || schoolMap.get(u.school_id || "") || "",
+      Created: u.createdAt.toLocaleDateString("ru-RU"),
+    }));
+    const wsTeachers = XLSX.utils.json_to_sheet(teachersData);
+    XLSX.utils.book_append_sheet(wb, wsTeachers, "Преподаватели");
+
+    // Parents sheet
+    const parentsData = parents.map((u) => ({
+      ID: u.id,
+      Email: u.email,
+      Name: u.name,
+      School: u.school?.name || schoolMap.get(u.school_id || "") || "",
+      Children: u.children?.join(", ") || "",
+      Created: u.createdAt.toLocaleDateString("ru-RU"),
+    }));
+    const wsParents = XLSX.utils.json_to_sheet(parentsData);
+    XLSX.utils.book_append_sheet(wb, wsParents, "Родители");
+
+    // Students sheet
+    const studentsData = students.map((s) => ({
+      ID: s.id,
+      Name: s.name,
+      Group: s.group,
+      Specialty: s.specialty,
+      QR_Code: s.qr_code,
+      School: schoolMap.get(s.school_id) || "",
+      Created: s.createdAt.toLocaleDateString("ru-RU"),
+    }));
+    const wsStudents = XLSX.utils.json_to_sheet(studentsData);
+    XLSX.utils.book_append_sheet(wb, wsStudents, "Школьники");
+
+    // Active Events sheet
+    const eventsData = activeEvents.map((e) => ({
+      ID: e.id,
+      Name: e.name,
+      Description: e.description || "",
+      Schedule: e.schedule.map((sc) => `${sc.dayOfWeek} ${sc.startTime}-${sc.endTime}`).join("; "),
+      School: schoolMap.get(e.school_id) || "",
+    }));
+    const wsEvents = XLSX.utils.json_to_sheet(eventsData);
+    XLSX.utils.book_append_sheet(wb, wsEvents, "Активные события");
+
+    // Attendance Records sheet
+    const attendanceData = attendanceRecords.map((a) => ({
+      ID: a.id,
+      Student_ID: a.student_id,
+      Student_Name: a.studentName,
+      Event_Name: a.event_name,
+      Timestamp: a.timestamp.toLocaleString("ru-RU"),
+      Scanned_By: a.scanned_by,
+    }));
+    const wsAttendance = XLSX.utils.json_to_sheet(attendanceData);
+    XLSX.utils.book_append_sheet(wb, wsAttendance, "Отметки");
+
+    XLSX.writeFile(wb, "reports.xlsx");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -127,13 +234,9 @@ export default function ReportsPage() {
           </Card>
         </div>
 
-        {/* Google Sheets Export */}
+        {/* Excel Export */}
         <div className="mb-8">
-          <GoogleSheetsExport
-            attendanceRecords={attendanceRecords}
-            students={students}
-            events={events}
-          />
+          <Button onClick={handleExcelExport}>Экспорт в Excel</Button>
         </div>
 
         {/* Attendance by Event */}
@@ -153,7 +256,6 @@ export default function ReportsPage() {
                     <div className="min-w-0">
                       <div className="font-medium truncate">{event.name}</div>
                       <div className="text-sm text-muted-foreground flex items-center gap-2">
-                        <span>{event.date.toLocaleDateString("ru-RU")}</span>
                         {event.is_active && <Badge variant="default">Активно</Badge>}
                       </div>
                     </div>

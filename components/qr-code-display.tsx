@@ -22,7 +22,7 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
 
   const generateQRCode = () => {
     if (!student.qr_code) {
-      setError("QR-код не задан для этого студента");
+      setError("QR-код не задан для этого школьника");
       setQRCodeURL("");
       return;
     }
@@ -119,9 +119,8 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
             <div class="qr-container">
               <div class="student-info">
                 <h2>${student.name}</h2>
-                <p>Группа: ${student.group}</p>
-                <p>Курс: ${student.course}</p>
-                <p>Специальность: ${student.specialty}</p>
+                <p>Класс: ${student.group}</p>
+                <p>Секция: ${student.specialty}</p>
                 <p>ID: ${student.qr_code || "Не задан"}</p>
               </div>
               <div class="qr-code">
@@ -172,7 +171,6 @@ export function QRCodeDisplay({ student, trigger }: QRCodeDisplayProps) {
                 <h3 className="font-semibold text-lg">{student.name}</h3>
                 <div className="flex items-center justify-center gap-2 flex-wrap">
                   <Badge variant="secondary">{student.group}</Badge>
-                  <Badge variant="outline">Курс: {student.course}</Badge>
                   <Badge variant="outline">ID: {student.qr_code || "Не задан"}</Badge>
                 </div>
               </div>

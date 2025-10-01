@@ -90,7 +90,7 @@ export default function HomePage() {
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Система контроля посещаемости</h1>
-            <p className="text-gray-600">Управление посещаемостью внеклассных мероприятий колледжа ИТ с помощью QR-кодов</p>
+            <p className="text-gray-600">Управление посещаемостью внеклассных мероприятий/кружков/секций школы с помощью QR-кодов</p>
           </div>
           <Button variant="outline" onClick={handleLogout}>
             <LogOut className="h-4 w-4 mr-2" />
@@ -103,13 +103,13 @@ export default function HomePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-white border-0 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Всего студентов</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">Всего школьников</CardTitle>
             <Users className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">{students.length}</div>
             <p className="text-xs text-gray-500">
-              {students.length > 0 ? "Зарегистрированы в системе" : "Добавьте студентов"}
+              {students.length > 0 ? "Зарегистрированы в системе" : "Добавьте школьников"}
             </p>
           </CardContent>
         </Card>
@@ -161,7 +161,7 @@ export default function HomePage() {
               Сканировать QR-код
             </CardTitle>
             <CardDescription className="text-gray-600">
-              Отметить посещение студента сканированием QR-кода
+              Отметить посещение школьника сканированием QR-кода
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -175,9 +175,9 @@ export default function HomePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-gray-900">
               <Users className="h-5 w-5 text-blue-600" />
-              Управление студентами
+              Управление школьниками
             </CardTitle>
-            <CardDescription className="text-gray-600">Добавить, редактировать или удалить студентов</CardDescription>
+            <CardDescription className="text-gray-600">Добавить, редактировать или удалить школьников</CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/students">
@@ -185,7 +185,7 @@ export default function HomePage() {
                 variant="outline"
                 className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 bg-transparent"
               >
-                Управлять студентами
+                Управлять школьниками
               </Button>
             </Link>
           </CardContent>

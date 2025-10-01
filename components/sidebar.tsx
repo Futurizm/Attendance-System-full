@@ -28,10 +28,7 @@ const getNavigation = (role: UserRole, schoolId: string | null) => {
     case "school_admin":
       return [
         { name: "Главная", href: "/", icon: Home },
-        { name: "Преподаватели", href: "/teachers", icon: Users },
-        { name: "Родители", href: "/parents", icon: Users },
-        { name: "Школьники", href: "/students", icon: Users },
-        { name: "Мероприятия", href: schoolId ? `/events` : "/events", icon: Calendar },
+        { name: "Школа", href: "/school", icon: Users },
         { name: "Аналитика", href: "/analytics", icon: BarChart3 },
         { name: "Отчёты", href: "/reports", icon: FileText },
       ];

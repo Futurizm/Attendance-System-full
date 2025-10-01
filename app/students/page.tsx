@@ -41,9 +41,8 @@ import { toast } from "sonner";
 
 const studentSchema = z.object({
   name: z.string().min(1, "Имя обязательно"),
-  group: z.string().min(1, "Группа обязательна"),
-  course: z.number().int().min(1).max(4, "Курс от 1 до 4"),
-  specialty: z.string().min(1, "Специальность обязательна"),
+  group: z.string().min(1, "Класс обязателен"),
+  specialty: z.string().min(1, "Секция обязательна"),
   qr_code: z.string().min(1, "QR-код обязателен"),
 });
 
@@ -64,7 +63,6 @@ export default function StudentsPage() {
     defaultValues: {
       name: "",
       group: "",
-      course: 1,
       specialty: "",
       qr_code: "",
     },
@@ -83,7 +81,7 @@ export default function StudentsPage() {
       setStudents(data);
     } catch (error: any) {
       console.error("Error loading students:", error);
-      toast.error("Ошибка при загрузке студентов: " + (error.message || "Неизвестная ошибка"));
+      toast.error("Ошибка при загрузке школьников: " + (error.message || "Неизвестная ошибка"));
     } finally {
       setLoading(false);
     }
@@ -99,7 +97,6 @@ export default function StudentsPage() {
       form.reset({
         name: editingStudent.name,
         group: editingStudent.group,
-        course: editingStudent.course,
         specialty: editingStudent.specialty,
         qr_code: editingStudent.qr_code,
       });
@@ -108,7 +105,6 @@ export default function StudentsPage() {
       form.reset({
         name: "",
         group: "",
-        course: 1,
         specialty: "",
         qr_code: newQrCode,
       });
@@ -163,7 +159,6 @@ export default function StudentsPage() {
       form.reset({
         name: "",
         group: "",
-        course: 1,
         specialty: "",
         qr_code: crypto.randomUUID(),
       });
@@ -171,7 +166,7 @@ export default function StudentsPage() {
       await loadStudents();
     } catch (error: any) {
       console.error("Error saving student:", error);
-      toast.error("Ошибка при сохранении студента: " + (error.message || "Неизвестная ошибка"));
+      toast.error("Ошибка при сохранении школьников: " + (error.message || "Неизвестная ошибка"));
     }
   };
 
@@ -193,7 +188,7 @@ export default function StudentsPage() {
         }
       } catch (error: any) {
         console.error("Error deleting student:", error);
-        toast.error("Ошибка при удалении студента: " + (error.message || "Неизвестная ошибка"));
+        toast.error("Ошибка при удалении школьника: " + (error.message || "Неизвестная ошибка"));
       }
     }
   };
@@ -237,8 +232,8 @@ export default function StudentsPage() {
       <div className="bg-white rounded-lg border p-6">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Управление студентами</h1>
-            <p className="text-gray-600">Добавляйте, редактируйте и управляйте студентами колледжа</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Управление школьниками</h1>
+            <p className="text-gray-600">Добавляйте, редактируйте и управляйте школьниками колледжа</p>
           </div>
           <div className="flex gap-2">
             <BulkQRGenerator students={students} />
@@ -246,28 +241,28 @@ export default function StudentsPage() {
               <DialogTrigger asChild>
                 <Button className="bg-blue-600 hover:bg-blue-700">
                   <Plus className="h-4 w-4 mr-2" />
-                  Добавить студента
+                  Добавить школьнике
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>{editingStudent ? "Редактировать студента" : "Добавить студента"}</DialogTitle>
+                  <DialogTitle>{editingStudent ? "Редактировать школьника" : "Добавить школьника"}</DialogTitle>
                   <DialogDescription>
-                    Заполните информацию о студенте.
+                    Заполните информацию о школьнике.
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <div>
-                    <Label htmlFor="name">Имя</Label>
+                    <Label htmlFor="name">ФИО</Label>
                     <Input id="name" {...form.register("name")} />
                     {form.formState.errors.name && <p className="text-red-500 text-sm">{form.formState.errors.name.message}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="group">Группа</Label>
+                    <Label htmlFor="group">Класс</Label>
                     <Input id="group" {...form.register("group")} />
                     {form.formState.errors.group && <p className="text-red-500 text-sm">{form.formState.errors.group.message}</p>}
                   </div>
-                  <div>
+                  {/* <div>
                     <Label htmlFor="course">Курс</Label>
                     <Select
                       defaultValue={form.watch("course").toString()}
@@ -283,9 +278,9 @@ export default function StudentsPage() {
                       </SelectContent>
                     </Select>
                     {form.formState.errors.course && <p className="text-red-500 text-sm">{form.formState.errors.course.message}</p>}
-                  </div>
+                  </div> */}
                   <div>
-                    <Label htmlFor="specialty">Специальность</Label>
+                    <Label htmlFor="specialty">Секция</Label>
                     <Input id="specialty" {...form.register("specialty")} />
                     {form.formState.errors.specialty && <p className="text-red-500 text-sm">{form.formState.errors.specialty.message}</p>}
                   </div>
@@ -361,9 +356,6 @@ export default function StudentsPage() {
                         <Badge variant="secondary" className="bg-gray-100 text-gray-700 hover:bg-gray-200">
                           {student.group}
                         </Badge>
-                        <Badge variant="outline" className="border-blue-200 text-blue-700">
-                          {student.course} курс
-                        </Badge>
                         <span className="text-sm text-gray-500 truncate">QR: {student.qr_code || "Не установлен"}</span>
                       </div>
                     </div>
@@ -397,7 +389,7 @@ export default function StudentsPage() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Подтвердите удаление</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Вы уверены, что хотите удалить студента {deletingStudent?.name}?
+                            Вы уверены, что хотите удалить школьника {deletingStudent?.name}?
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -420,12 +412,12 @@ export default function StudentsPage() {
           <CardContent className="pt-6 text-center py-12">
             <div className="text-gray-500 mb-4">
               <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Нет студентов</h3>
-              <p className="text-gray-600">Добавьте первого студента для начала работы</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Нет школьников</h3>
+              <p className="text-gray-600">Добавьте первого школьника для начала работы</p>
             </div>
             <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setIsAddOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Добавить студента
+              Добавить школьника
             </Button>
           </CardContent>
         </Card>

@@ -103,7 +103,7 @@ export default function AnalyticsPage() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Всего студентов</CardTitle>
+                <CardTitle>Всего школьников</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{analytics.totalStudents}</div>

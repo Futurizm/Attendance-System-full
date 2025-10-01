@@ -23,7 +23,6 @@ export async function getAllStudents(token: string): Promise<Student[]> {
     id: student._id,
     name: student.name,
     group: student.group,
-    course: student.course,
     specialty: student.specialty,
     qr_code: student.qr_code,
     school_id: student.school_id,
@@ -48,7 +47,6 @@ export async function getStudentById(id: string, token: string): Promise<Student
     id: student._id,
     name: student.name,
     group: student.group,
-    course: student.course,
     specialty: student.specialty,
     school_id: student.school_id,
     qr_code: student.qr_code,
@@ -76,7 +74,6 @@ export async function getStudentByqr_code(qr_code: string, token: string): Promi
     id: student._id,
     name: student.name,
     group: student.group,
-    course: student.course,
     specialty: student.specialty,
     qr_code: student.qr_code,
     school_id: student.school_id,
@@ -102,7 +99,6 @@ export async function addStudent(student: Omit<Student, "id" | "createdAt" | "qr
     id: addedStudent._id,
     name: addedStudent.name,
     group: addedStudent.group,
-    course: addedStudent.course,
     specialty: addedStudent.specialty,
     qr_code: addedStudent.qr_code,
     school_id: addedStudent.school_id,
@@ -110,7 +106,6 @@ export async function addStudent(student: Omit<Student, "id" | "createdAt" | "qr
   };
 }
 
-// Add getMyStudent
 export async function getMyStudent(token: string): Promise<Student | null> {
   const res = await fetch(`${API_URL}/my-student`, {
     headers: {
@@ -127,7 +122,6 @@ export async function getMyStudent(token: string): Promise<Student | null> {
     id: student._id,
     name: student.name,
     group: student.group,
-    course: student.course,
     specialty: student.specialty,
     qr_code: student.qr_code,
     school_id: student.school_id,
@@ -135,7 +129,6 @@ export async function getMyStudent(token: string): Promise<Student | null> {
   };
 }
 
-// Add getMyChildren
 export async function getMyChildren(token: string): Promise<Student[]> {
   console.log("Fetching children with Token:", token.slice(0, 10) + "...");
   const res = await fetch(`${API_URL}/my-children`, {
@@ -157,16 +150,14 @@ export async function getMyChildren(token: string): Promise<Student[]> {
   return childrenData.map((child: any) => ({
     id: child._id,
     name: child.name,
-    group: child.group || "", // Fallback to empty string if null
-    course: child.course || 0, // Fallback to 0 if null
-    specialty: child.specialty || "", // Fallback to empty string if null
+    group: child.group || "",
+    specialty: child.specialty || "",
     qr_code: child.qr_code,
     school_id: child.school_id,
     createdAt: new Date(child.created_at),
   }));
 }
 
-// Add addChildToParent
 export async function addChildToParent(parentId: string, studentId: string, token: string): Promise<User | null> {
   const res = await fetch(`${API_URL}/users/${parentId}/add-child`, {
     method: "PUT",
@@ -210,7 +201,6 @@ export async function updateStudent(id: string, updates: Partial<Omit<Student, "
     id: updatedStudent._id,
     name: updatedStudent.name,
     group: updatedStudent.group,
-    course: updatedStudent.course,
     specialty: updatedStudent.specialty,
     qr_code: updatedStudent.qr_code,
     school_id: updatedStudent.school_id?._id || updatedStudent.school_id,
@@ -374,6 +364,22 @@ export async function deleteAttendanceRecord(recordId: string, token: string): P
   return res.ok;
 }
 
+export async function deleteAllAttendanceByEvent(eventName: string, token: string): Promise<boolean> {
+  const res = await fetch(`${API_URL}/attendance/event/${eventName}/delete-all`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    console.error("Error deleting all attendance by event:", errorData);
+    throw new Error(`Error deleting all attendance by event: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  return res.ok;
+}
+
 export async function getAllEvents(token: string): Promise<Event[]> {
   const res = await fetch(`${API_URL}/events`, {
     headers: {
@@ -390,10 +396,11 @@ export async function getAllEvents(token: string): Promise<Event[]> {
   return events.map((event: any) => ({
     id: event._id,
     name: event.name,
-    date: new Date(event.date),
+    schedule: event.schedule,
     description: event.description,
     is_active: event.is_active,
     school_id: event.school_id,
+    teacher_id: event.teacher_id,
   }));
 }
 
@@ -413,10 +420,11 @@ export async function getActiveEvents(token: string): Promise<Event[]> {
   return events.map((event: any) => ({
     id: event._id,
     name: event.name,
-    date: new Date(event.date),
+    schedule: event.schedule,
     description: event.description,
     is_active: event.is_active,
     school_id: event.school_id,
+    teacher_id: event.teacher_id,
   }));
 }
 
@@ -430,7 +438,7 @@ export async function addEvent(event: Omit<Event, "id">, token: string): Promise
     },
     body: JSON.stringify({
       ...event,
-      date: event.date.toISOString(), // Ensure date is sent in ISO format
+      schedule: event.schedule,
     }),
   });
   if (!res.ok) {
@@ -442,11 +450,11 @@ export async function addEvent(event: Omit<Event, "id">, token: string): Promise
   return {
     id: addedEvent._id,
     name: addedEvent.name,
-    date: new Date(addedEvent.date),
+    schedule: addedEvent.schedule,
     description: addedEvent.description,
     is_active: addedEvent.is_active,
     school_id: addedEvent.school_id,
-    teacher_id: addedEvent.teacher_id, // Include teacher_id in response
+    teacher_id: addedEvent.teacher_id,
   };
 }
 
@@ -460,7 +468,7 @@ export async function updateEvent(id: string, updates: Partial<Omit<Event, "id">
     },
     body: JSON.stringify({
       ...updates,
-      date: updates.date ? updates.date.toISOString() : undefined,
+      schedule: updates.schedule,
     }),
   });
   if (!res.ok) {
@@ -472,7 +480,7 @@ export async function updateEvent(id: string, updates: Partial<Omit<Event, "id">
   return {
     id: updatedEvent._id,
     name: updatedEvent.name,
-    date: new Date(updatedEvent.date),
+    schedule: updatedEvent.schedule,
     description: updatedEvent.description,
     is_active: updatedEvent.is_active,
     school_id: updatedEvent.school_id,
@@ -626,7 +634,7 @@ export async function getAllUsers(token: string, schoolId?: string, role?: strin
   }));
 }
 
-export async function addUser(user: { email: string; password: string; role: string; school_id?: string }, token: string): Promise<User | null> {
+export async function addUser(user: { email: string; password: string; role: string; school_id?: string; name?: string }, token: string): Promise<User | null> {
   const res = await fetch(`${API_URL}/auth/register`, {
     method: "POST",
     headers: {
@@ -640,7 +648,23 @@ export async function addUser(user: { email: string; password: string; role: str
     console.error("Error adding user:", errorData);
     throw new Error(`Error adding user: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
   }
-  return null; // Backend returns { message: 'User registered' }
+  const response = await res.json();
+  if (response.message === "User registered") {
+    const users = await getAllUsers(token, user.school_id, user.role);
+    const newUser = users.find((u) => u.email === user.email);
+    if (!newUser) {
+      throw new Error("Failed to retrieve newly created user");
+    }
+    return {
+      id: newUser.id,
+      email: newUser.email,
+      role: newUser.role,
+      school_id: newUser.school_id,
+      createdAt: newUser.createdAt,
+      name: newUser.name,
+    };
+  }
+  throw new Error("Unexpected response from server");
 }
 
 export async function deleteUser(id: string, token: string): Promise<boolean> {
@@ -711,8 +735,9 @@ export async function getUsersBySchoolAndRole(schoolId: string, role: string, to
     role: user.role,
     school_id: user.school_id?._id,
     school: user.school_id ? { id: user.school_id._id, name: user.school_id.name } : undefined,
+    name: user.name,
     createdAt: new Date(user.created_at),
-    children: user.children ? user.children.map((child: any) => child._id) : [], // Преобразуем children в массив ID
+    children: user.children ? user.children.map((child: any) => child._id) : [],
   }));
 }
 
@@ -732,7 +757,6 @@ export async function getStudentsBySchool(schoolId: string, token: string): Prom
     id: student._id,
     name: student.name,
     group: student.group,
-    course: student.course,
     specialty: student.specialty,
     qr_code: student.qr_code,
     school_id: student.school_id,
@@ -755,10 +779,11 @@ export async function getEventsBySchool(schoolId: string, token: string): Promis
   return events.map((event: any) => ({
     id: event._id,
     name: event.name,
-    date: new Date(event.date),
+    schedule: event.schedule,
     description: event.description,
     is_active: event.is_active,
     school_id: event.school_id,
+    teacher_id: event.teacher_id,
   }));
 }
 
@@ -810,3 +835,43 @@ export async function getSchoolById(id: string, token: string): Promise<School> 
   };
 }
 
+export async function getCurrentUser(token: string): Promise<User | null> {
+  const res = await fetch(`${API_URL}/auth/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    console.error("Error fetching current user:", errorData);
+    throw new Error(`Error fetching current user: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  const user = await res.json();
+  return {
+    id: user._id,
+    email: user.email,
+    role: user.role,
+    school_id: user.school_id?._id,
+    school: user.school_id ? { id: user.school_id._id, name: user.school_id.name } : undefined,
+    createdAt: new Date(user.created_at),
+    children: user.children ? user.children.map((child: any) => child._id) : [],
+    name: user.name,
+  };
+}
+
+export async function deleteEvent(id: string, token: string): Promise<boolean> {
+  const res = await fetch(`${API_URL}/events/${id}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    console.error("Error deleting event:", errorData);
+    throw new Error(`Error deleting event: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  return res.ok;
+}

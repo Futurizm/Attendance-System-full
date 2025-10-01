@@ -72,7 +72,7 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
   const handleBulkPrint = () => {
     const selectedStudentData = students.filter((s) => selectedStudents.includes(s.id));
     if (selectedStudentData.length === 0) {
-      toast.error("Выберите хотя бы одного студента для печати");
+      toast.error("Выберите хотя бы одного школьника для печати");
       return;
     }
 
@@ -81,7 +81,7 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
       let content = `
         <html>
           <head>
-            <title>Массовые QR-коды студентов</title>
+            <title>Массовые QR-коды школьников</title>
             <style>
               @page { margin: 20mm; }
               body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
@@ -110,9 +110,8 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
             <div class="qr-card">
               <div class="student-info">
                 <h2>${student.name}</h2>
-                <p>Группа: ${student.group}</p>
-                <p>Курс: ${student.course}</p>
-                <p>Специальность: ${student.specialty}</p>
+                <p>Класс: ${student.group}</p>
+                <p>Секция: ${student.specialty}</p>
                 <p>ID: ${student.qr_code || "Не задан"}</p>
               </div>
               <div class="qr-code">
@@ -139,7 +138,7 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
   const handleBulkDownload = () => {
     const selectedStudentData = students.filter((s) => selectedStudents.includes(s.id));
     if (selectedStudentData.length === 0) {
-      toast.error("Выберите хотя бы одного студента для скачивания");
+      toast.error("Выберите хотя бы одного школьника для скачивания");
       return;
     }
 
@@ -167,7 +166,7 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Массовые QR-коды студентов</DialogTitle>
+          <DialogTitle>Массовые QR-коды школьников</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {/* Select All */}
@@ -178,7 +177,7 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
               onCheckedChange={handleSelectAll}
             />
             <label htmlFor="select-all" className="text-sm font-medium">
-              Выбрать всех ({students.length} студентов)
+              Выбрать всех ({students.length} школьников)
             </label>
           </div>
 
@@ -203,9 +202,6 @@ export function BulkQRGenerator({ students }: BulkQRGeneratorProps) {
                           <span className="font-medium">{student.name}</span>
                           <Badge variant="secondary" className="text-xs">
                             {student.group}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            Курс: {student.course}
                           </Badge>
                         </div>
                       </div>

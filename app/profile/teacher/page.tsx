@@ -2,21 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { jwtDecode } from "jwt-decode";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, Calendar } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { getEventsBySchool, getAttendanceByEvent, getSchoolById } from "@/lib/database";
-import type { Event, AttendanceRecord, School } from "@/lib/types";
-
-interface TeacherProfile {
-  email: string;
-  school_id: string;
-  userId: string;
-}
+import { getCurrentUser, getEventsBySchool, getAttendanceByEvent, getSchoolById } from "@/lib/database";
+import type { Event, AttendanceRecord, School, TeacherProfile } from "@/lib/types";
 
 export default function TeacherProfilePage() {
   const router = useRouter();
@@ -30,64 +23,81 @@ export default function TeacherProfilePage() {
 
   useEffect(() => {
     const t = localStorage.getItem("token");
+    console.log("Token:", t);
     if (!t) {
       toast.error("Токен не найден. Войдите в систему.");
       router.push("/login");
       return;
     }
     setToken(t);
+    fetchData(t);
+  }, [router]);
+
+  const fetchData = async (t: string) => {
+    setLoading(true);
+    setError(null);
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setError("Запрос превысил время ожидания");
+      toast.error("Запрос превысил время ожидания");
+    }, 10000);
     try {
-      const decoded: any = jwtDecode(t);
-      if (decoded.role !== "teacher") {
+      console.log("Starting fetchData...");
+      // Fetch current user data
+      const user = await getCurrentUser(t);
+      console.log("User data received:", user);
+      if (!user) {
+        throw new Error("Не удалось получить данные пользователя");
+      }
+      if (user.role !== "teacher") {
         toast.error("Доступ запрещён для этой роли");
         router.push("/");
         return;
       }
       setTeacher({
-        email: decoded.email,
-        school_id: decoded.school_id,
-        userId: decoded.userId,
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        school_id: user.school_id,
+        name: user.name,
+        createdAt: user.createdAt,
       });
-      fetchData(decoded.school_id, decoded.userId, t);
-    } catch (err) {
-      console.error("Error decoding token:", err);
-      toast.error("Ошибка декодирования токена");
-      router.push("/login");
-    }
-  }, [router]);
 
-  const fetchData = async (schoolId: string, teacherId: string, t: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Fetch school details
-      console.log("Fetching school for ID:", schoolId);
-      const schoolData = await getSchoolById(schoolId, t);
-      setSchool(schoolData);
+      // Fetch school data
+      if (user.school_id) {
+        const schoolData = await getSchoolById(user.school_id, t);
+        console.log("School data received:", schoolData);
+        setSchool(schoolData);
+      } else {
+        console.warn("No school_id found for user");
+      }
 
       // Fetch events where the teacher is assigned
-      const allEvents = await getEventsBySchool(schoolId, t);
-      const teacherEvents = allEvents.filter((event) => event.teacher_id === teacherId);
-      setEvents(teacherEvents);
+      if (user.school_id) {
+        const allEvents = await getEventsBySchool(user.school_id, t);
+        const teacherEvents = allEvents.filter((event) => event.teacher_id === user.id);
+        setEvents(teacherEvents);
 
-      // Fetch attendance for each event
-      const attendancePromises = teacherEvents.map(async (event) => ({
-        eventName: event.name,
-        attendance: await getAttendanceByEvent(event.name, t),
-      }));
-      const attendanceData = await Promise.all(attendancePromises);
-      const newAttendanceMap = new Map(attendanceData.map(({ eventName, attendance }) => [eventName, attendance]));
-      setAttendanceMap(newAttendanceMap);
+        // Fetch attendance for each event
+        const attendancePromises = teacherEvents.map(async (event) => ({
+          eventName: event.name,
+          attendance: await getAttendanceByEvent(event.name, t),
+        }));
+        const attendanceData = await Promise.all(attendancePromises);
+        const newAttendanceMap = new Map(attendanceData.map(({ eventName, attendance }) => [eventName, attendance]));
+        setAttendanceMap(newAttendanceMap);
+      }
     } catch (err: any) {
       console.error("Error fetching teacher profile data:", {
         message: err.message,
-        schoolId,
         token: t.slice(0, 10) + "...",
       });
       setError(err.message);
       toast.error(`Ошибка загрузки профиля: ${err.message}`);
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
+      console.log("Fetch completed, loading set to false");
     }
   };
 
@@ -97,8 +107,8 @@ export default function TeacherProfilePage() {
   };
 
   const handleRetry = () => {
-    if (teacher && token) {
-      fetchData(teacher.school_id, teacher.userId, token);
+    if (token) {
+      fetchData(token);
     }
   };
 
@@ -139,7 +149,11 @@ export default function TeacherProfilePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            {teacher.name && <p><strong>Имя:</strong> {teacher.name}</p>}
+            <p><strong>Email:</strong> {teacher.email}</p>
+            <p><strong>Роль:</strong> Преподаватель</p>
             <p><strong>Школа:</strong> {school ? school.name : "Не удалось загрузить данные школы"}</p>
+            <p><strong>Дата регистрации:</strong> {teacher.createdAt.toLocaleDateString("ru-RU")}</p>
           </CardContent>
         </Card>
       </div>
@@ -169,7 +183,6 @@ export default function TeacherProfilePage() {
                   return (
                     <TableRow key={event.id}>
                       <TableCell>{event.name}</TableCell>
-                      <TableCell>{event.date.toLocaleDateString("ru-RU")}</TableCell>
                       <TableCell>{event.description || "-"}</TableCell>
                       <TableCell>
                         <Badge variant={event.is_active ? "success" : "secondary"}>
@@ -177,7 +190,7 @@ export default function TeacherProfilePage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {attendanceRecords.length} студент(ов)
+                        {attendanceRecords.length} школьник(ов)
                       </TableCell>
                     </TableRow>
                   );

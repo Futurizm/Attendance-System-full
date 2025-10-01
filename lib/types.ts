@@ -3,11 +3,10 @@ export type UserRole = 'teacher' | 'parent' | 'student' | 'school_admin' | 'main
 export interface Student {
   id: string;
   name: string;
-  group: string; // Группа (например, "ИТ-21", "ПИ-22")
-  course: number; // Курс от 1 до 4
-  specialty: string; // Специальность (например, "Информационные технологии", "Программирование")
+  group: string;
+  specialty: string;
   qr_code: string;
-  school_id: string; // ID школы (обязательно для привязки студента)
+  school_id: string;
   createdAt: Date;
 }
 
@@ -23,11 +22,15 @@ export interface AttendanceRecord {
 export interface Event {
   id: string;
   name: string;
-  date: Date;
+  schedule: {
+    dayOfWeek: string;
+    startTime: string;
+    endTime: string;
+  }[];
   description?: string;
   is_active: boolean;
   school_id: string;
-  teacher_id?: string; // Ensure this is included
+  teacher_id?: string;
 }
 
 export interface School {
@@ -40,8 +43,29 @@ export interface User {
   id: string;
   email: string;
   role: UserRole;
-  school_id?: string; // Optional for main_admin, required for school_admin
+  school_id?: string;
   school?: { id: string; name: string };
+  createdAt: Date;
+  children?: string[];
+  name?: string;
+}
+
+export interface ParentProfile {
+  id: string;
+  email: string;
+  role: string;
+  school_id?: string;
+  name?: string;
+  createdAt: Date;
+  children?: string[];
+}
+
+export interface TeacherProfile {
+  id: string;
+  email: string;
+  role: string;
+  school_id?: string;
+  name?: string;
   createdAt: Date;
 }
 

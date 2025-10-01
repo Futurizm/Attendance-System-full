@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Calendar, Users, Trash2, LogOut } from "lucide-react";
-import { getAllEvents, getAttendanceByEvent, addEvent, toggleEventActive, deleteAttendanceRecord } from "@/lib/database";
+import { getAllEvents, getAttendanceByEvent, addEvent, toggleEventActive, deleteAttendanceRecord, deleteAllAttendanceByEvent } from "@/lib/database";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,49 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import type { Event, AttendanceRecord } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useForm, useFieldArray } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Схема валидации для события
+const eventSchema = z.object({
+  name: z.string().min(1, "Название обязательно"),
+  schedule: z.array(
+    z.object({
+      dayOfWeek: z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], {
+        errorMap: () => ({ message: "Выберите день недели" }),
+      }),
+      startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Неверный формат времени"),
+      endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Неверный формат времени"),
+    })
+  ).min(1, "Добавьте хотя бы одно расписание"),
+  description: z.string().optional(),
+});
+
+type EventFormData = z.infer<typeof eventSchema>;
+
+// Цвета для дней недели
+const dayColors: { [key: string]: string } = {
+  Monday: "bg-blue-100 text-blue-800",
+  Tuesday: "bg-green-100 text-green-800",
+  Wednesday: "bg-yellow-100 text-yellow-800",
+  Thursday: "bg-purple-100 text-purple-800",
+  Friday: "bg-pink-100 text-pink-800",
+  Saturday: "bg-orange-100 text-orange-800",
+  Sunday: "bg-red-100 text-red-800",
+};
+
+// Названия дней недели на русском
+const dayNamesRu: { [key: string]: string } = {
+  Monday: "Понедельник",
+  Tuesday: "Вторник",
+  Wednesday: "Среда",
+  Thursday: "Четверг",
+  Friday: "Пятница",
+  Saturday: "Суббота",
+  Sunday: "Воскресенье",
+};
 
 export default function EventsPage() {
   const router = useRouter();
@@ -23,14 +66,22 @@ export default function EventsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [newEvent, setNewEvent] = useState({
-    name: "",
-    date: "",
-    description: "",
-    is_active: false,
-  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const form = useForm<EventFormData>({
+    resolver: zodResolver(eventSchema),
+    defaultValues: {
+      name: "",
+      schedule: [{ dayOfWeek: "Monday", startTime: "09:00", endTime: "10:00" }],
+      description: "",
+    },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "schedule",
+  });
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -66,9 +117,7 @@ export default function EventsPage() {
     fetchEventsAndAttendance();
   }, [router]);
 
-  const handleCreateEvent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleCreateEvent = async (data: EventFormData) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     const token = localStorage.getItem("token");
@@ -76,29 +125,28 @@ export default function EventsPage() {
       router.push("/login");
       return;
     }
-    console.log("handleCreateEvent called with:", newEvent);
     try {
       const eventToAdd = {
-        name: newEvent.name,
-        date: new Date(newEvent.date),
-        description: newEvent.description,
-        is_active: newEvent.is_active,
+        name: data.name,
+        schedule: data.schedule,
+        description: data.description || "",
+        is_active: false,
       };
       const addedEvent = await addEvent(eventToAdd, token);
       if (addedEvent) {
         console.log("Event added:", addedEvent);
-        setEvents((prev) => {
-          const updatedEvents = [addedEvent, ...prev];
-          console.log("Updated events state:", updatedEvents);
-          return updatedEvents;
-        });
+        setEvents((prev) => [addedEvent, ...prev]);
         setAttendanceMap((prev) => new Map(prev).set(addedEvent.name, []));
         toast({
           title: "Успех",
           description: "Мероприятие успешно создано",
         });
         setIsCreateDialogOpen(false);
-        setNewEvent({ name: "", date: "", description: "", is_active: false });
+        form.reset({
+          name: "",
+          schedule: [{ dayOfWeek: "Monday", startTime: "09:00", endTime: "10:00" }],
+          description: "",
+        });
       } else {
         throw new Error("Failed to add event");
       }
@@ -114,7 +162,7 @@ export default function EventsPage() {
     }
   };
 
-  const handleToggleEventActive = async (eventId: string, currentActive: boolean) => {
+  const handleToggleEventActive = async (eventId: string, currentActive: boolean, eventName: string) => {
     const token = localStorage.getItem("token");
     if (!token) {
       router.push("/login");
@@ -131,6 +179,23 @@ export default function EventsPage() {
       return;
     }
     try {
+      if (currentActive) {
+        // Deactivating event: delete all attendance records
+        const success = await deleteAllAttendanceByEvent(eventName, token);
+        if (success) {
+          setAttendanceMap((prev) => {
+            const newMap = new Map(prev);
+            newMap.set(eventName, []);
+            return newMap;
+          });
+          toast({
+            title: "Успех",
+            description: "Все записи посещаемости удалены",
+          });
+        } else {
+          throw new Error("Failed to delete attendance records");
+        }
+      }
       const success = await toggleEventActive(eventId, !currentActive, token);
       console.log("toggleEventActive result:", success);
       if (success) {
@@ -220,46 +285,67 @@ export default function EventsPage() {
                 <DialogHeader>
                   <DialogTitle>Создать новое мероприятие</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleCreateEvent} className="space-y-4">
+                <form onSubmit={form.handleSubmit(handleCreateEvent)} className="space-y-4">
                   <div>
                     <Label htmlFor="name">Название</Label>
-                    <Input
-                      id="name"
-                      value={newEvent.name}
-                      onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
-                      required
-                      disabled={isSubmitting}
-                    />
+                    <Input id="name" {...form.register("name")} />
+                    {form.formState.errors.name && <p className="text-red-500 text-sm">{form.formState.errors.name.message}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="date">Дата</Label>
-                    <Input
-                      id="date"
-                      type="datetime-local"
-                      value={newEvent.date}
-                      onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
-                      required
-                      disabled={isSubmitting}
-                    />
+                    <Label>Расписание</Label>
+                    {fields.map((field, index) => (
+                      <div key={field.id} className="flex items-center gap-2 mt-2">
+                        <Select
+                          {...form.register(`schedule.${index}.dayOfWeek`)}
+                          onValueChange={(value) => form.setValue(`schedule.${index}.dayOfWeek`, value)}
+                          defaultValue={field.dayOfWeek}
+                        >
+                          <SelectTrigger className="w-[150px]">
+                            <SelectValue placeholder="День недели" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(dayNamesRu).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>{label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="time"
+                          {...form.register(`schedule.${index}.startTime`)}
+                          className="w-[100px]"
+                        />
+                        <Input
+                          type="time"
+                          {...form.register(`schedule.${index}.endTime`)}
+                          className="w-[100px]"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => remove(index)}
+                          disabled={fields.length === 1}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    {form.formState.errors.schedule && (
+                      <p className="text-red-500 text-sm">{form.formState.errors.schedule.message}</p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => append({ dayOfWeek: "Monday", startTime: "09:00", endTime: "10:00" })}
+                    >
+                      <Plus className="h-4 w-4 mr-2" /> Добавить время
+                    </Button>
                   </div>
                   <div>
                     <Label htmlFor="description">Описание</Label>
-                    <Textarea
-                      id="description"
-                      value={newEvent.description}
-                      onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="is_active">Активно</Label>
-                    <Input
-                      id="is_active"
-                      type="checkbox"
-                      checked={newEvent.is_active}
-                      onChange={(e) => setNewEvent({ ...newEvent, is_active: e.target.checked })}
-                      disabled={isSubmitting}
-                    />
+                    <Textarea id="description" {...form.register("description")} placeholder="Опционально" />
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button
@@ -316,7 +402,7 @@ export default function EventsPage() {
                         className="whitespace-nowrap"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleToggleEventActive(event.id, event.is_active);
+                          handleToggleEventActive(event.id, event.is_active, event.name);
                         }}
                       >
                         {event.is_active ? "Деактивировать" : "Активировать"}
@@ -327,9 +413,16 @@ export default function EventsPage() {
                 <CardContent className="flex-grow">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm text-muted-foreground">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        {event.date.toLocaleString("ru-RU")}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {event.schedule?.map((sched, idx) => (
+                          <Badge
+                            key={idx}
+                            variant="secondary"
+                            className={`${dayColors[sched.dayOfWeek]} hover:bg-opacity-80`}
+                          >
+                            {dayNamesRu[sched.dayOfWeek]} {sched.startTime}-{sched.endTime}
+                          </Badge>
+                        ))}
                       </div>
                       <div className="flex items-center gap-1">
                         <Users className="h-4 w-4" />
@@ -353,8 +446,19 @@ export default function EventsPage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    <strong>Дата:</strong> {selectedEvent.date.toLocaleString("ru-RU")}
+                    <strong>Расписание:</strong>
                   </p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedEvent.schedule?.map((sched, idx) => (
+                      <Badge
+                        key={idx}
+                        variant="secondary"
+                        className={`${dayColors[sched.dayOfWeek]} hover:bg-opacity-80`}
+                      >
+                        {dayNamesRu[sched.dayOfWeek]} {sched.startTime}-{sched.endTime}
+                      </Badge>
+                    ))}
+                  </div>
                   <p className="text-sm text-muted-foreground">
                     <strong>Описание:</strong> {selectedEvent.description || "Нет описания"}
                   </p>
@@ -366,7 +470,7 @@ export default function EventsPage() {
                   </p>
                 </div>
                 <div className="mt-4">
-                  <h3 className="text-lg font-semibold">Посетившие студенты</h3>
+                  <h3 className="text-lg font-semibold">Посетившие школьники</h3>
                   {attendanceMap.get(selectedEvent.name)?.length ? (
                     <div className="overflow-x-auto">
                       <Table>

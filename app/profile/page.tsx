@@ -111,14 +111,13 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
-                Информация о студенте
+                Информация о школьнике
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <p><strong>Имя:</strong> {studentData.name}</p>
-              <p><strong>Группа:</strong> {studentData.group}</p>
-              <p><strong>Курс:</strong> {studentData.course}</p>
-              <p><strong>Специальность:</strong> {studentData.specialty}</p>
+              <p><strong>Класс:</strong> {studentData.group}</p>
+              <p><strong>Секция:</strong> {studentData.specialty}</p>
             </CardContent>
           </Card>
 
@@ -200,9 +199,8 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <p><strong>Группа:</strong> {child.group}</p>
-                <p><strong>Курс:</strong> {child.course}</p>
-                <p><strong>Специальность:</strong> {child.specialty}</p>
+                <p><strong>Класс:</strong> {child.group}</p>
+                <p><strong>Секция:</strong> {child.specialty}</p>
 
                 <h3 className="font-semibold mt-4">Посещаемость мероприятий</h3>
                 {events.length > 0 ? (

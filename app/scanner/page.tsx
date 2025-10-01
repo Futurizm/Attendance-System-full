@@ -104,11 +104,11 @@ export default function ScannerPage() {
     } catch (error: any) {
       console.error("Scan error:", error.message, error.stack);
       const message = error.message.includes("unique_student_event")
-        ? `Посещение для этого студента уже отмечено для ${activeEvents.find((e) => e.id === selectedEvent)?.name || "мероприятия"}`
+        ? `Посещение для этого школьника уже отмечено для ${activeEvents.find((e) => e.id === selectedEvent)?.name || "мероприятия"}`
         : error.message.includes("Student not found")
         ? "Студент не найден по этому QR-коду"
         : error.message.includes("Invalid student_id")
-        ? "Недействительный идентификатор студента"
+        ? "Недействительный идентификатор школьника"
         : "Ошибка при обработке QR-кода";
       toast.error(message);
     }
@@ -130,7 +130,7 @@ export default function ScannerPage() {
         <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">Сканер посещаемости</h1>
-            <p className="text-muted-foreground">Отметьте посещение студентов сканированием QR-кодов</p>
+            <p className="text-muted-foreground">Отметьте посещение школьников сканированием QR-кодов</p>
           </div>
           <Button variant="outline" onClick={handleLogout}>
             <LogOut className="h-4 w-4 mr-2" />
@@ -214,7 +214,7 @@ export default function ScannerPage() {
             <CardHeader>
               <CardTitle>Сканировать QR-код</CardTitle>
               <CardDescription>
-                Сканируйте QR-код студента для отметки посещения на мероприятии
+                Сканируйте QR-код школьника для отметки посещения на мероприятии
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -231,7 +231,7 @@ export default function ScannerPage() {
           <Card>
             <CardHeader>
               <CardTitle>Сегодняшние отметки</CardTitle>
-              <CardDescription>Последние отмеченные студенты для выбранного мероприятия</CardDescription>
+              <CardDescription>Последние отмеченные школьники для выбранного мероприятия</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">

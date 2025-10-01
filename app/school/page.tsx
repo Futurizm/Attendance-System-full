@@ -1,26 +1,25 @@
+"use client"
 
-"use client";
-
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { Plus, Edit, Trash2, LogOut, Users, User, Calendar, QrCode, UserCog } from "lucide-react";
-import Link from "next/link";
-import QRCode from "qrcode";
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { toast } from "sonner"
+import { Plus, Edit, Trash2, LogOut, Users, Calendar, QrCode, UserCog } from "lucide-react"
+import Link from "next/link"
+import QRCode from "qrcode"
 import {
   getUsersBySchoolAndRole,
   addUser,
@@ -32,14 +31,16 @@ import {
   getEventsBySchool,
   addEvent,
   updateEvent,
+  deleteEvent,
   toggleEventActive,
   addChildToParent,
   getSchoolById,
   getAttendanceByEvent,
   deleteAttendanceRecord,
   deleteAllAttendanceByEvent,
-} from "@/lib/database";
-import type { Student, School, Event, AttendanceRecord, User } from "@/lib/types";
+  getCurrentUser,
+} from "@/lib/database"
+import type { Student, Event, AttendanceRecord, School, User } from "@/lib/types"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,28 +51,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { useForm, useFieldArray } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+} from "@/components/ui/alert-dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { useForm, useFieldArray } from "react-hook-form"
+import { z } from "zod"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
-// Схема валидации для школьника
+// Validation schemas
 const studentSchema = z.object({
-  name: z.string().min(1, "Имя обязательно"),
+  name: z.string().min(1, "ФИО обязательно"),
   group: z.string().min(1, "Класс обязателен"),
   specialty: z.string().min(1, "Секция обязательна"),
   email: z.string().email("Неверный email").min(1, "Email обязателен"),
   password: z.string().min(8, "Пароль минимум 8 символов"),
   qr_code: z.string().min(1, "QR-код обязателен"),
-});
+})
 
-type StudentFormData = z.infer<typeof studentSchema>;
-
-// Схема валидации для события
 const eventSchema = z.object({
   name: z.string().min(1, "Название обязательно"),
   schedule: z.array(
@@ -85,30 +83,22 @@ const eventSchema = z.object({
   ).min(1, "Добавьте хотя бы одно расписание"),
   description: z.string().optional(),
   teacher_id: z.string().min(1, "Преподаватель обязателен"),
-});
+})
 
-type EventFormData = z.infer<typeof eventSchema>;
-
-interface UserForSchool {
-  id: string;
-  email: string;
-  role: string;
-  createdAt: Date;
-  name?: string;
-}
-
+type StudentFormData = z.infer<typeof studentSchema>
+type EventFormData = z.infer<typeof eventSchema>
 interface SchoolDetail {
-  id: string;
-  name: string;
+  id: string
+  name: string
 }
 
 const userSchema = z.object({
   email: z.string().email("Неверный email").min(1, "Email обязателен"),
   password: z.string().min(8, "Пароль минимум 8 символов"),
-  name: z.string().min(1, "Имя обязательно для этой роли"),
-});
+  name: z.string().min(1, "Имя обязательно"),
+})
 
-type UserFormData = z.infer<typeof userSchema>;
+type UserFormData = z.infer<typeof userSchema>
 
 // Цвета для дней недели
 const dayColors: { [key: string]: string } = {
@@ -119,12 +109,22 @@ const dayColors: { [key: string]: string } = {
   Friday: "bg-pink-100 text-pink-800",
   Saturday: "bg-orange-100 text-orange-800",
   Sunday: "bg-red-100 text-red-800",
-};
+}
 
-// Компонент для списка пользователей (админы/родители/преподаватели)
-function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
+// Названия дней недели на русском
+const dayNamesRu: { [key: string]: string } = {
+  Monday: "Понедельник",
+  Tuesday: "Вторник",
+  Wednesday: "Среда",
+  Thursday: "Четверг",
+  Friday: "Пятница",
+  Saturday: "Суббота",
+  Sunday: "Воскресенье",
+}
+
+// Users Section Component
+function UsersSection({ schoolId, role, students }: { schoolId: string; role: string; students: Student[] }) {
   const [users, setUsers] = useState<User[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -132,6 +132,7 @@ function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
   const [selectedParent, setSelectedParent] = useState<User | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
 
+  // Initialize form with react-hook-form
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
     defaultValues: {
@@ -143,10 +144,9 @@ function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
 
   useEffect(() => {
     const t = localStorage.getItem("token");
-    if (t) setToken(t);
     if (t) {
+      setToken(t);
       fetchUsers(t);
-      if (role === "parent") fetchStudents(t);
     }
   }, [schoolId, role]);
 
@@ -156,33 +156,35 @@ function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
       setUsers(data);
     } catch (err) {
       console.error(`Error fetching ${role}:`, err);
-      toast.error(`Ошибка загрузки ${role === 'teacher' ? 'преподавателей' : role === 'parent' ? 'родителей' : 'админов'}`);
+      toast.error(
+        `Ошибка загрузки ${role === "teacher" ? "преподавателей" : role === "parent" ? "родителей" : "админов"}`,
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchStudents = async (t: string) => {
-    try {
-      const data = await getStudentsBySchool(schoolId, t);
-      setStudents(data);
-    } catch (err) {
-      console.error("Error fetching students:", err);
-      toast.error("Ошибка загрузки школьников");
+  const handleCreateUser = async (data: UserFormData) => {
+    if (!token) {
+      toast.error("Токен не найден. Войдите в систему.");
+      return;
     }
-  };
-
-  const handleCreateOrUpdateUser = async (data: UserFormData) => {
-    if (!token) return;
+    if (!schoolId) {
+      toast.error("Идентификатор школы не указан.");
+      return;
+    }
     try {
-      await addUser({ email: data.email, password: data.password, role, school_id: schoolId, name: data.name }, token);
+      await addUser(
+        { email: data.email, password: data.password, role, school_id: schoolId, name: data.name },
+        token,
+      );
       await fetchUsers(token);
       setIsDialogOpen(false);
       form.reset();
       toast.success("Пользователь создан");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error creating user:", err);
-      toast.error("Ошибка создания пользователя");
+      toast.error(`Ошибка создания пользователя: ${err.message || "Неизвестная ошибка"}`);
     }
   };
 
@@ -212,39 +214,46 @@ function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
     }
   };
 
-  const roleIcon = role === 'school_admin' ? UserCog : role === 'teacher' ? QrCode : Users;
+  const roleIcon = role === "school_admin" ? UserCog : role === "teacher" ? QrCode : Users;
+  const roleLabel = role === "teacher" ? "Преподаватели" : role === "parent" ? "Родители" : "Админы школы";
 
-  if (loading) return <div>Загрузка...</div>;
+  if (loading) return <div>Загрузка {roleLabel.toLowerCase()}...</div>;
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">
-          Список {role === 'teacher' ? 'преподавателей' : role === 'parent' ? 'родителей' : 'админов школы'}
-        </h2>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold">{roleLabel}</h2>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> Добавить</Button>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" /> Добавить
+            </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Добавить {role === 'teacher' ? 'Преподавателя' : role === 'parent' ? 'Родителя' : 'Админа школы'}</DialogTitle>
+              <DialogTitle>Добавить {roleLabel.toLowerCase()}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={form.handleSubmit(handleCreateOrUpdateUser)} className="space-y-4">
-              <div>
-                <Label htmlFor="name">ФИО</Label>
-                <Input id="name" {...form.register("name")} />
-                {form.formState.errors.name && <p className="text-red-500 text-sm">{form.formState.errors.name.message}</p>}
-              </div>
+            <form onSubmit={form.handleSubmit(handleCreateUser)} className="space-y-4">
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" {...form.register("email")} />
-                {form.formState.errors.email && <p className="text-red-500 text-sm">{form.formState.errors.email.message}</p>}
+                {form.formState.errors.email && (
+                  <p className="text-red-500 text-sm">{form.formState.errors.email.message}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="password">Пароль</Label>
                 <Input id="password" type="password" {...form.register("password")} />
-                {form.formState.errors.password && <p className="text-red-500 text-sm">{form.formState.errors.password.message}</p>}
+                {form.formState.errors.password && (
+                  <p className="text-red-500 text-sm">{form.formState.errors.password.message}</p>
+                )}
+              </div>
+              <div>
+                <Label htmlFor="name">Имя</Label>
+                <Input id="name" {...form.register("name")} />
+                {form.formState.errors.name && (
+                  <p className="text-red-500 text-sm">{form.formState.errors.name.message}</p>
+                )}
               </div>
               <Button type="submit">Создать</Button>
             </form>
@@ -252,75 +261,70 @@ function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
         </Dialog>
       </div>
       <div className="grid gap-4">
-        {users.map((user) => (
-          <Card key={user.id}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                {user.name ? `${user.name} (${user.email})` : user.email}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>Создан: {user.createdAt.toLocaleDateString("ru-RU")}</p>
-              {role === "parent" && (
-                <div className="mt-2">
-                  <p className="font-semibold">Дети:</p>
-                  {user.children && user.children.length > 0 ? (
-                    <ul className="list-disc pl-5">
-                      {user.children.map((childId) => {
-                        const child = students.find((s) => s.id === childId);
-                        return (
-                          <li key={childId}>
-                            {child ? `${child.name} (${child.group})` : "Неизвестный школьник"}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : (
-                    <p>Нет привязанных детей</p>
-                  )}
-                  <Button
-                    variant="outline"
-                    className="mt-2"
-                    onClick={() => {
-                      setSelectedParent(user);
-                      setIsAddChildDialogOpen(true);
-                    }}
-                  >
-                    <Plus className="h-4 w-4 mr-2" /> Добавить ребёнка
+        {users.length > 0 ? (
+          users.map((user) => (
+            <Card key={user.id}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {user.name ? `${user.name} (${user.email})` : user.email}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p>Создан: {user.createdAt.toLocaleDateString("ru-RU")}</p>
+                {role === "parent" && (
+                  <div className="mt-2">
+                    <p className="font-semibold">Дети:</p>
+                    {user.children && user.children.length > 0 ? (
+                      <ul className="list-disc pl-5">
+                        {user.children.map((childId) => {
+                          const child = students.find((s) => s.id === childId);
+                          return (
+                            <li key={childId}>
+                              {child ? `${child.name} (${child.group})` : "Неизвестный школьник"}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p>Нет привязанных детей</p>
+                    )}
+                    <Button
+                      variant="outline"
+                      className="mt-2 bg-transparent"
+                      onClick={() => {
+                        setSelectedParent(user);
+                        setIsAddChildDialogOpen(true);
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" /> Добавить ребёнка
+                    </Button>
+                  </div>
+                )}
+                <div className="flex gap-2 mt-2">
+                  <Button variant="outline" onClick={() => toast.info("Редактирование в разработке")}>
+                    <Edit className="h-4 w-4 mr-2" /> Редактировать
+                  </Button>
+                  <Button variant="destructive" onClick={() => handleDeleteUser(user.id)}>
+                    <Trash2 className="h-4 w-4 mr-2" /> Удалить
                   </Button>
                 </div>
-              )}
-              <div className="flex gap-2 mt-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    toast.info("Редактирование в разработке");
-                  }}
-                >
-                  <Edit className="h-4 w-4 mr-2" /> Редактировать
-                </Button>
-                <Button variant="destructive" onClick={() => handleDeleteUser(user.id)}>
-                  <Trash2 className="h-4 w-4 mr-2" /> Удалить
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <p>Нет {roleLabel.toLowerCase()} для отображения</p>
+        )}
       </div>
-
       <Dialog open={isAddChildDialogOpen} onOpenChange={setIsAddChildDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Добавить ребёнка к {selectedParent?.email}</DialogTitle>
+            <DialogTitle>Добавить ребёнка к {selectedParent?.name || selectedParent?.email}</DialogTitle>
             <DialogDescription>Выберите школьника для привязки к родителю.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Школьник</Label>
-              <Select
-                value={selectedStudentId}
-                onValueChange={setSelectedStudentId}
-              >
+              <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Выберите школьника" />
                 </SelectTrigger>
@@ -343,47 +347,42 @@ function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
   );
 }
 
-// Компонент для школьников
-function StudentsTab({ schoolId }: { schoolId: string }) {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-  const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
-  const [qrCodeURL, setQrCodeURL] = useState<string>("");
-  const [qrError, setQrError] = useState<string | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+// Students Section Component
+function StudentsSection({ schoolId }: { schoolId: string }) {
+  const [students, setStudents] = useState<Student[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null)
+  const [deletingStudent, setDeletingStudent] = useState<Student | null>(null)
+  const [qrCodeURL, setQrCodeURL] = useState<string>("")
+  const [qrError, setQrError] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(null)
 
   const form = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
-    defaultValues: {
-      name: "",
-      group: "",
-      specialty: "",
-      email: "",
-      password: "",
-      qr_code: "",
-    },
-  });
+    defaultValues: { name: "", group: "", specialty: "", email: "", password: "", qr_code: "" },
+  })
 
   useEffect(() => {
-    const t = localStorage.getItem("token");
-    if (t) setToken(t);
-    if (t) loadStudents(t);
-  }, [schoolId]);
+    const t = localStorage.getItem("token")
+    if (t) {
+      setToken(t)
+      loadStudents(t)
+    }
+  }, [schoolId])
 
   const loadStudents = async (t: string) => {
     try {
-      setLoading(true);
-      const data = await getStudentsBySchool(schoolId, t);
-      setStudents(data);
+      setLoading(true)
+      const data = await getStudentsBySchool(schoolId, t)
+      setStudents(data)
     } catch (error: any) {
-      console.error("Error loading students:", error);
-      toast.error("Ошибка при загрузке школьников: " + (error.message || "Неизвестная ошибка"));
+      console.error("Error loading students:", error)
+      toast.error("Ошибка при загрузке школьников: " + (error.message || "Неизвестная ошибка"))
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
     if (editingStudent) {
@@ -394,58 +393,8 @@ function StudentsTab({ schoolId }: { schoolId: string }) {
         email: "",
         password: "",
         qr_code: editingStudent.qr_code,
-      });
+      })
     } else {
-      const newQrCode = crypto.randomUUID();
-      form.reset({
-        name: "",
-        group: "",
-        specialty: "",
-        email: "",
-        password: "",
-        qr_code: newQrCode,
-      });
-    }
-  }, [editingStudent, form]);
-
-  useEffect(() => {
-    if (isAddOpen && form.watch("qr_code")) {
-      setQrError(null);
-      QRCode.toDataURL(form.watch("qr_code"), { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
-        if (err) {
-          console.error("QR Code URL Error:", err);
-          setQrError("Ошибка генерации QR-кода");
-          setQrCodeURL("");
-        } else {
-          setQrCodeURL(url);
-        }
-      });
-    } else {
-      setQrCodeURL("");
-      setQrError(null);
-    }
-  }, [isAddOpen, form.watch("qr_code")]);
-
-  const onSubmit = async (data: StudentFormData) => {
-    if (!token) {
-      toast.error("Токен не найден. Войдите в систему.");
-      return;
-    }
-    try {
-      const studentData = {
-        ...data,
-        school_id: schoolId,
-      };
-      let updatedStudent: Student | null = null;
-      if (editingStudent) {
-        updatedStudent = await updateStudent(editingStudent.id, studentData, token);
-        toast.success(`Студент ${data.name} успешно обновлен`);
-      } else {
-        updatedStudent = await addStudent(studentData, token);
-        toast.success(`Студент ${data.name} успешно добавлен`);
-      }
-      setIsAddOpen(false);
-      setEditingStudent(null);
       form.reset({
         name: "",
         group: "",
@@ -453,33 +402,80 @@ function StudentsTab({ schoolId }: { schoolId: string }) {
         email: "",
         password: "",
         qr_code: crypto.randomUUID(),
-      });
-      setQrCodeURL("");
-      await loadStudents(token);
-    } catch (error: any) {
-      console.error("Error saving student:", error);
-      toast.error("Ошибка при сохранении школьника: " + (error.message || "Неизвестная ошибка"));
+      })
     }
-  };
+  }, [editingStudent, form])
+
+  useEffect(() => {
+    if (isAddOpen && form.watch("qr_code")) {
+      setQrError(null)
+      QRCode.toDataURL(form.watch("qr_code"), { width: 256, margin: 2, errorCorrectionLevel: "H" }, (err, url) => {
+        if (err) {
+          console.error("QR Code URL Error:", err)
+          setQrError("Ошибка генерации QR-кода")
+          setQrCodeURL("")
+        } else {
+          setQrCodeURL(url)
+        }
+      })
+    } else {
+      setQrCodeURL("")
+      setQrError(null)
+    }
+  }, [isAddOpen, form.watch("qr_code")])
+
+  const onSubmit = async (data: StudentFormData) => {
+    if (!token) {
+      toast.error("Токен не найден. Войдите в систему.")
+      return
+    }
+    try {
+      const studentData = { ...data, school_id: schoolId }
+      let updatedStudent: Student | null = null
+      if (editingStudent) {
+        updatedStudent = await updateStudent(editingStudent.id, studentData, token)
+        if (updatedStudent) toast.success(`Школьник ${data.name} успешно обновлен`)
+      } else {
+        updatedStudent = await addStudent(studentData, token)
+        if (updatedStudent) toast.success(`Школьник ${data.name} успешно добавлен`)
+      }
+      if (!updatedStudent) throw new Error("Failed to save student")
+      setIsAddOpen(false)
+      setEditingStudent(null)
+      form.reset({
+        name: "",
+        group: "",
+        specialty: "",
+        email: "",
+        password: "",
+        qr_code: crypto.randomUUID(),
+      })
+      setQrCodeURL("")
+      setTimeout(() => loadStudents(token), 500)
+    } catch (error: any) {
+      console.error("Error saving student:", error)
+      toast.error("Ошибка при сохранении школьника: " + (error.message || "Неизвестная ошибка"))
+    }
+  }
 
   const handleDelete = async () => {
-    if (!token || !deletingStudent) return;
+    if (!token || !deletingStudent) return
     try {
-      const success = await deleteStudent(deletingStudent.id, token);
+      const success = await deleteStudent(deletingStudent.id, token)
       if (success) {
-        toast.success(`Студент ${deletingStudent.name} успешно удален`);
-        setDeletingStudent(null);
-        await loadStudents(token);
+        toast.success(`Школьник ${deletingStudent.name} успешно удален`)
+        setDeletingStudent(null)
+        await loadStudents(token)
       } else {
-        throw new Error("Failed to delete student");
+        throw new Error("Failed to delete student")
       }
     } catch (error: any) {
-      console.error("Error deleting student:", error);
-      toast.error("Ошибка при удалении школьника: " + (error.message || "Неизвестная ошибка"));
+      console.error("Error deleting student:", error)
+      toast.error("Ошибка при удалении школьника: " + (error.message || "Неизвестная ошибка"))
     }
-  };
+  }
 
-  if (loading) return <div>Загрузка школьников...</div>;
+  if (loading) return <div>Загрузка школьников...</div>
 
   return (
     <div className="space-y-6">
@@ -489,60 +485,64 @@ function StudentsTab({ schoolId }: { schoolId: string }) {
             <h2 className="text-xl font-bold text-gray-900 mb-2">Управление школьниками</h2>
             <p className="text-gray-600">Добавляйте, редактируйте и управляйте школьниками</p>
           </div>
-          <div className="flex gap-2">
-            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Добавить школьника
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{editingStudent ? "Редактировать школьника" : "Добавить школьника"}</DialogTitle>
-                  <DialogDescription>
-                    Заполните информацию о школьнике.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <div>
-                    <Label htmlFor="name">ФИО</Label>
-                    <Input id="name" {...form.register("name")} />
-                    {form.formState.errors.name && <p className="text-red-500 text-sm">{form.formState.errors.name.message}</p>}
-                  </div>
-                  <div>
-                    <Label htmlFor="group">Класс</Label>
-                    <Input id="group" {...form.register("group")} />
-                    {form.formState.errors.group && <p className="text-red-500 text-sm">{form.formState.errors.group.message}</p>}
-                  </div>
-                  <div>
-                    <Label htmlFor="specialty">Секция</Label>
-                    <Input id="specialty" {...form.register("specialty")} />
-                    {form.formState.errors.specialty && <p className="text-red-500 text-sm">{form.formState.errors.specialty.message}</p>}
-                  </div>
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" {...form.register("email")} />
-                    {form.formState.errors.email && <p className="text-red-500 text-sm">{form.formState.errors.email.message}</p>}
-                  </div>
-                  <div>
-                    <Label htmlFor="password">Пароль</Label>
-                    <Input id="password" type="password" {...form.register("password")} />
-                    {form.formState.errors.password && <p className="text-red-500 text-sm">{form.formState.errors.password.message}</p>}
-                  </div>
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
-                      Отмена
-                    </Button>
-                    <Button type="submit">{editingStudent ? "Сохранить" : "Добавить"}</Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-4 w-4 mr-2" /> Добавить школьника
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{editingStudent ? "Редактировать школьника" : "Добавить школьника"}</DialogTitle>
+                <DialogDescription>Заполните информацию о школьника.</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <div>
+                  <Label htmlFor="name">ФИО</Label>
+                  <Input id="name" {...form.register("name")} />
+                  {form.formState.errors.name && (
+                    <p className="text-red-500 text-sm">{form.formState.errors.name.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="group">Класс</Label>
+                  <Input id="group" {...form.register("group")} />
+                  {form.formState.errors.group && (
+                    <p className="text-red-500 text-sm">{form.formState.errors.group.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="specialty">Секция</Label>
+                  <Input id="specialty" {...form.register("specialty")} />
+                  {form.formState.errors.specialty && (
+                    <p className="text-red-500 text-sm">{form.formState.errors.specialty.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" type="email" {...form.register("email")} />
+                  {form.formState.errors.email && (
+                    <p className="text-red-500 text-sm">{form.formState.errors.email.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="password">Пароль</Label>
+                  <Input id="password" type="password" {...form.register("password")} />
+                  {form.formState.errors.password && (
+                    <p className="text-red-500 text-sm">{form.formState.errors.password.message}</p>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
+                    Отмена
+                  </Button>
+                  <Button type="submit">{editingStudent ? "Сохранить" : "Добавить"}</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
-
       <div className="grid gap-4">
         {students.length > 0 ? (
           students.map((student) => (
@@ -568,7 +568,6 @@ function StudentsTab({ schoolId }: { schoolId: string }) {
                       </div>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <Button
                       variant="outline"
@@ -614,7 +613,6 @@ function StudentsTab({ schoolId }: { schoolId: string }) {
           <p>Нет школьников для отображения</p>
         )}
       </div>
-
       {students.length === 0 && !loading && (
         <Card className="bg-white border-0 shadow-sm">
           <CardContent className="pt-6 text-center py-12">
@@ -631,21 +629,21 @@ function StudentsTab({ schoolId }: { schoolId: string }) {
         </Card>
       )}
     </div>
-  );
+  )
 }
 
-// Компонент для мероприятий
-function EventsTab({ schoolId }: { schoolId: string }) {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [attendanceMap, setAttendanceMap] = useState<Map<string, AttendanceRecord[]>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [deletingEvent, setDeletingEvent] = useState<Event | null>(null);
-  const [teachers, setTeachers] = useState<User[]>([]);
-  const [token, setToken] = useState<string | null>(null);
+// Events Section Component
+function EventsSection({ schoolId }: { schoolId: string }) {
+  const [events, setEvents] = useState<Event[]>([])
+  const [attendanceMap, setAttendanceMap] = useState<Map<string, AttendanceRecord[]>>(new Map())
+  const [loading, setLoading] = useState(true)
+  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null)
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  const [deletingEvent, setDeletingEvent] = useState<Event | null>(null)
+  const [teachers, setTeachers] = useState<User[]>([])
+  const [token, setToken] = useState<string | null>(null)
 
   const form = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
@@ -655,51 +653,51 @@ function EventsTab({ schoolId }: { schoolId: string }) {
       description: "",
       teacher_id: "",
     },
-  });
+  })
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "schedule",
-  });
+  })
 
   useEffect(() => {
-    const t = localStorage.getItem("token");
-    if (t) setToken(t);
+    const t = localStorage.getItem("token")
     if (t) {
-      loadEvents(t);
-      loadTeachers(t);
+      setToken(t)
+      loadEvents(t)
+      loadTeachers(t)
     }
-  }, [schoolId]);
+  }, [schoolId])
 
   const loadTeachers = async (t: string) => {
     try {
-      const fetchedTeachers = await getUsersBySchoolAndRole(schoolId, "teacher", t);
-      setTeachers(fetchedTeachers);
+      const fetchedTeachers = await getUsersBySchoolAndRole(schoolId, "teacher", t)
+      setTeachers(fetchedTeachers)
     } catch (error: any) {
-      console.error("Error loading teachers:", error);
-      toast.error("Ошибка при загрузке преподавателей");
+      console.error("Error loading teachers:", error)
+      toast.error("Ошибка при загрузке преподавателей")
     }
-  };
+  }
 
   const loadEvents = async (t: string) => {
     try {
-      setLoading(true);
-      const fetchedEvents = await getEventsBySchool(schoolId, t);
+      setLoading(true)
+      const fetchedEvents = await getEventsBySchool(schoolId, t)
       const attendancePromises = fetchedEvents.map(async (event) => ({
         eventName: event.name,
         attendance: await getAttendanceByEvent(event.name, t),
-      }));
-      const attendanceData = await Promise.all(attendancePromises);
-      const newAttendanceMap = new Map(attendanceData.map(({ eventName, attendance }) => [eventName, attendance]));
-      setEvents(fetchedEvents);
-      setAttendanceMap(newAttendanceMap);
+      }))
+      const attendanceData = await Promise.all(attendancePromises)
+      const newAttendanceMap = new Map(attendanceData.map(({ eventName, attendance }) => [eventName, attendance]))
+      setEvents(fetchedEvents)
+      setAttendanceMap(newAttendanceMap)
     } catch (error: any) {
-      console.error("Error loading events:", error);
-      toast.error("Ошибка при загрузке мероприятий");
+      console.error("Error loading events:", error)
+      toast.error("Ошибка при загрузке мероприятий")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
     if (editingEvent) {
@@ -708,174 +706,161 @@ function EventsTab({ schoolId }: { schoolId: string }) {
         schedule: editingEvent.schedule,
         description: editingEvent.description || "",
         teacher_id: editingEvent.teacher_id || "",
-      });
+      })
     } else {
       form.reset({
         name: "",
         schedule: [{ dayOfWeek: "Monday", startTime: "09:00", endTime: "10:00" }],
         description: "",
         teacher_id: teachers.length > 0 ? teachers[0].id : "",
-      });
+      })
     }
-  }, [editingEvent, teachers, form]);
+  }, [editingEvent, teachers, form])
 
   const onSubmit = async (data: EventFormData) => {
     if (!token) {
-      toast.error("Токен не найден. Войдите в систему.");
-      return;
+      toast.error("Токен не найден. Войдите в систему.")
+      return
     }
     try {
       const eventData = {
         ...data,
         is_active: editingEvent ? editingEvent.is_active : false,
         school_id: schoolId,
-      };
-      console.log("Submitting event data:", eventData);
-      let updatedEvent: Event | null = null;
+      }
+      let updatedEvent: Event | null = null
       if (editingEvent) {
-        updatedEvent = await updateEvent(editingEvent.id, eventData, token);
+        updatedEvent = await updateEvent(editingEvent.id, eventData, token)
         if (updatedEvent) {
-          toast.success(`Мероприятие "${data.name}" успешно обновлено`);
+          toast.success(`Мероприятие "${data.name}" успешно обновлено`)
         } else {
-          throw new Error("Failed to update event");
+          throw new Error("Failed to update event")
         }
       } else {
-        updatedEvent = await addEvent(eventData as Omit<Event, "id">, token);
+        updatedEvent = await addEvent(eventData as Omit<Event, "id">, token)
         if (updatedEvent) {
-          toast.success(`Мероприятие "${data.name}" успешно добавлено`);
-          console.log("Added event response:", updatedEvent);
+          toast.success(`Мероприятие "${data.name}" успешно добавлено`)
         } else {
-          throw new Error("Failed to add event");
+          throw new Error("Failed to add event")
         }
       }
-      setIsAddOpen(false);
-      setEditingEvent(null);
+      setIsAddOpen(false)
+      setEditingEvent(null)
       form.reset({
         name: "",
         schedule: [{ dayOfWeek: "Monday", startTime: "09:00", endTime: "10:00" }],
         description: "",
         teacher_id: teachers.length > 0 ? teachers[0].id : "",
-      });
-      await loadEvents(token);
+      })
+      await loadEvents(token)
     } catch (error: any) {
-      console.error("Error saving event:", error);
-      toast.error("Ошибка при сохранении мероприятия: " + (error.message || "Неизвестная ошибка"));
+      console.error("Error saving event:", error)
+      toast.error("Ошибка при сохранении мероприятия: " + (error.message || "Неизвестная ошибка"))
     }
-  };
+  }
 
   const handleToggleActive = async (eventId: string, currentActive: boolean, eventName: string) => {
     if (!token) {
-      toast.error("Токен не найден. Войдите в систему.");
-      return;
+      toast.error("Токен не найден. Войдите в систему.")
+      return
     }
-    console.log(`Attempting to toggle event ${eventId} to ${!currentActive}, eventName: ${eventName}`);
     if (!eventId || eventId === "undefined") {
-      console.error("Invalid eventId:", eventId);
+      console.error("Invalid eventId:", eventId)
       toast({
         title: "Ошибка",
         description: "Недействительный ID мероприятия",
         variant: "destructive",
-      });
-      return;
+      })
+      return
     }
     try {
       if (currentActive) {
         // Deactivating event: delete all attendance records
-        const success = await deleteAllAttendanceByEvent(eventName, token);
+        const success = await deleteAllAttendanceByEvent(eventName, token)
         if (success) {
           setAttendanceMap((prev) => {
-            const newMap = new Map(prev);
-            newMap.set(eventName, []);
-            return newMap;
-          });
+            const newMap = new Map(prev)
+            newMap.set(eventName, [])
+            return newMap
+          })
           toast({
             title: "Успех",
             description: "Все записи посещаемости удалены",
-          });
+          })
         } else {
-          throw new Error("Failed to delete attendance records");
+          throw new Error("Failed to delete attendance records")
         }
       }
-      const success = await toggleEventActive(eventId, !currentActive, token);
-      console.log("toggleEventActive result:", success);
+      const success = await toggleEventActive(eventId, !currentActive, token)
       if (success) {
         setEvents((prev) =>
           prev.map((event) =>
             event.id === eventId ? { ...event, is_active: !currentActive } : event
           )
-        );
+        )
         toast({
           title: "Успех",
           description: `Мероприятие ${currentActive ? "деактивировано" : "активировано"}`,
-        });
+        })
       } else {
-        throw new Error("Failed to toggle event active status");
+        throw new Error("Failed to toggle event active status")
       }
     } catch (error: any) {
-      console.error("Error in handleToggleActive:", error);
+      console.error("Error in handleToggleActive:", error)
       toast({
         title: "Ошибка",
-        description: `Произошла ошибка при ${currentActive ? "деактивации" : "активации"} мероприятия: ${error.message || "Неизвестная ошибка"}`,
+        description: `Произошла ошибка при ${currentActive ? "деактивации" : "активации"} мероприятия: ${
+          error.message || "Неизвестная ошибка"
+        }`,
         variant: "destructive",
-      });
+      })
     }
-  };
+  }
 
   const handleDelete = async () => {
-    if (!token || !deletingEvent) return;
+    if (!token || !deletingEvent) return
     try {
-      const success = await deleteEvent(deletingEvent.id, token);
+      const success = await deleteEvent(deletingEvent.id, token)
       if (success) {
-        toast.success(`Мероприятие "${deletingEvent.name}" успешно удалено`);
-        setDeletingEvent(null);
-        await loadEvents(token);
+        toast.success(`Мероприятие "${deletingEvent.name}" успешно удалено`)
+        setDeletingEvent(null)
+        await loadEvents(token)
       } else {
-        throw new Error("Failed to delete event");
+        throw new Error("Failed to delete event")
       }
     } catch (error: any) {
-      console.error("Error deleting event:", error);
-      toast.error("Ошибка при удалении мероприятия: " + (error.message || "Неизвестная ошибка"));
+      console.error("Error deleting event:", error)
+      toast.error("Ошибка при удалении мероприятия: " + (error.message || "Неизвестная ошибка"))
     }
-  };
+  }
 
   const handleDeleteAttendance = async (recordId: string, eventName: string) => {
-    if (!token) return;
+    if (!token) return
     try {
-      const success = await deleteAttendanceRecord(recordId, token);
+      const success = await deleteAttendanceRecord(recordId, token)
       if (success) {
         setAttendanceMap((prev) => {
-          const newMap = new Map(prev);
-          const updatedAttendance = newMap.get(eventName)?.filter((record) => record.id !== recordId) || [];
-          newMap.set(eventName, updatedAttendance);
-          return newMap;
-        });
-        toast.success("Запись о посещении удалена");
+          const newMap = new Map(prev)
+          const updatedAttendance = newMap.get(eventName)?.filter((record) => record.id !== recordId) || []
+          newMap.set(eventName, updatedAttendance)
+          return newMap
+        })
+        toast.success("Запись о посещении удалена")
       } else {
-        throw new Error("Failed to delete attendance record");
+        throw new Error("Failed to delete attendance record")
       }
     } catch (error: any) {
-      console.error("Error deleting attendance:", error);
-      toast.error(`Произошла ошибка при удалении записи: ${error.message || "Неизвестная ошибка"}`);
+      console.error("Error deleting attendance:", error)
+      toast.error(`Произошла ошибка при удалении записи: ${error.message || "Неизвестная ошибка"}`)
     }
-  };
+  }
 
   const openDetailsDialog = (event: Event) => {
-    console.log("Opening details for event:", event);
-    setSelectedEvent(event);
-    setIsDetailsDialogOpen(true);
-  };
+    setSelectedEvent(event)
+    setIsDetailsDialogOpen(true)
+  }
 
-  const dayNamesRu: { [key: string]: string } = {
-    Monday: "Понедельник",
-    Tuesday: "Вторник",
-    Wednesday: "Среда",
-    Thursday: "Четверг",
-    Friday: "Пятница",
-    Saturday: "Суббота",
-    Sunday: "Воскресенье",
-  };
-
-  if (loading) return <div>Загрузка мероприятий...</div>;
+  if (loading) return <div>Загрузка мероприятий...</div>
 
   return (
     <div className="space-y-6">
@@ -885,115 +870,114 @@ function EventsTab({ schoolId }: { schoolId: string }) {
             <h2 className="text-xl font-bold text-gray-900 mb-2">Управление мероприятиями</h2>
             <p className="text-gray-600">Добавляйте и управляйте мероприятиями школы</p>
           </div>
-          <div className="flex gap-2">
-            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Добавить мероприятие
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>{editingEvent ? "Редактировать мероприятие" : "Добавить мероприятие"}</DialogTitle>
-                  <DialogDescription>
-                    Заполните информацию о мероприятии и его расписании.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <div>
-                    <Label htmlFor="name">Название</Label>
-                    <Input id="name" {...form.register("name")} />
-                    {form.formState.errors.name && <p className="text-red-500 text-sm">{form.formState.errors.name.message}</p>}
-                  </div>
-                  <div>
-                    <Label>Расписание</Label>
-                    {fields.map((field, index) => (
-                      <div key={field.id} className="flex items-center gap-2 mt-2">
-                        <Select
-                          {...form.register(`schedule.${index}.dayOfWeek`)}
-                          onValueChange={(value) => form.setValue(`schedule.${index}.dayOfWeek`, value)}
-                          defaultValue={field.dayOfWeek}
-                        >
-                          <SelectTrigger className="w-[150px]">
-                            <SelectValue placeholder="День недели" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(dayNamesRu).map(([value, label]) => (
-                              <SelectItem key={value} value={value}>{label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="time"
-                          {...form.register(`schedule.${index}.startTime`)}
-                          className="w-[100px]"
-                        />
-                        <Input
-                          type="time"
-                          {...form.register(`schedule.${index}.endTime`)}
-                          className="w-[100px]"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => remove(index)}
-                          disabled={fields.length === 1}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    {form.formState.errors.schedule && (
-                      <p className="text-red-500 text-sm">{form.formState.errors.schedule.message}</p>
-                    )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() => append({ dayOfWeek: "Monday", startTime: "09:00", endTime: "10:00" })}
-                    >
-                      <Plus className="h-4 w-4 mr-2" /> Добавить время
-                    </Button>
-                  </div>
-                  <div>
-                    <Label htmlFor="description">Описание</Label>
-                    <Input id="description" {...form.register("description")} placeholder="Опционально" />
-                  </div>
-                  <div>
-                    <Label htmlFor="teacher_id">Преподаватель</Label>
-                    <Select
-                      value={form.watch("teacher_id") || ""}
-                      onValueChange={(value) => form.setValue("teacher_id", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Выберите преподавателя" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {teachers.map((teacher) => (
-                          <SelectItem key={teacher.id} value={teacher.id}>
-                            {teacher.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {form.formState.errors.teacher_id && <p className="text-red-500 text-sm">{form.formState.errors.teacher_id.message}</p>}
-                  </div>
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
-                      Отмена
-                    </Button>
-                    <Button type="submit">{editingEvent ? "Сохранить" : "Добавить"}</Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Добавить мероприятие
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingEvent ? "Редактировать мероприятие" : "Добавить мероприятие"}</DialogTitle>
+                <DialogDescription>Заполните информацию о мероприятии и его расписании.</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <div>
+                  <Label htmlFor="name">Название</Label>
+                  <Input id="name" {...form.register("name")} />
+                  {form.formState.errors.name && (
+                    <p className="text-red-500 text-sm">{form.formState.errors.name.message}</p>
+                  )}
+                </div>
+                <div>
+                  <Label>Расписание</Label>
+                  {fields.map((field, index) => (
+                    <div key={field.id} className="flex items-center gap-2 mt-2">
+                      <Select
+                        {...form.register(`schedule.${index}.dayOfWeek`)}
+                        onValueChange={(value) => form.setValue(`schedule.${index}.dayOfWeek`, value)}
+                        defaultValue={field.dayOfWeek}
+                      >
+                        <SelectTrigger className="w-[150px]">
+                          <SelectValue placeholder="День недели" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(dayNamesRu).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="time"
+                        {...form.register(`schedule.${index}.startTime`)}
+                        className="w-[100px]"
+                      />
+                      <Input
+                        type="time"
+                        {...form.register(`schedule.${index}.endTime`)}
+                        className="w-[100px]"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => remove(index)}
+                        disabled={fields.length === 1}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  {form.formState.errors.schedule && (
+                    <p className="text-red-500 text-sm">{form.formState.errors.schedule.message}</p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => append({ dayOfWeek: "Monday", startTime: "09:00", endTime: "10:00" })}
+                  >
+                    <Plus className="h-4 w-4 mr-2" /> Добавить время
+                  </Button>
+                </div>
+                <div>
+                  <Label htmlFor="description">Описание</Label>
+                  <Input id="description" {...form.register("description")} placeholder="Опционально" />
+                </div>
+                <div>
+                  <Label htmlFor="teacher_id">Преподаватель</Label>
+                  <Select
+                    value={form.watch("teacher_id") || ""}
+                    onValueChange={(value) => form.setValue("teacher_id", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите преподавателя" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teachers.map((teacher) => (
+                        <SelectItem key={teacher.id} value={teacher.id}>
+                          {teacher.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {form.formState.errors.teacher_id && (
+                    <p className="text-red-500 text-sm">{form.formState.errors.teacher_id.message}</p>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
+                    Отмена
+                  </Button>
+                  <Button type="submit">{editingEvent ? "Сохранить" : "Добавить"}</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
-
       <div className="grid gap-4">
         {events.length > 0 ? (
           events.map((event) => (
@@ -1026,7 +1010,6 @@ function EventsTab({ schoolId }: { schoolId: string }) {
                       </div>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                     <Switch
                       checked={event.is_active}
@@ -1041,8 +1024,8 @@ function EventsTab({ schoolId }: { schoolId: string }) {
                       size="sm"
                       className="border-gray-300 text-gray-700 hover:bg-gray-50 bg-transparent"
                       onClick={() => {
-                        setEditingEvent(event);
-                        setIsAddOpen(true);
+                        setEditingEvent(event)
+                        setIsAddOpen(true)
                       }}
                     >
                       <Edit className="h-4 w-4" />
@@ -1080,7 +1063,6 @@ function EventsTab({ schoolId }: { schoolId: string }) {
           <p>Нет мероприятий для отображения</p>
         )}
       </div>
-
       {events.length === 0 && !loading && (
         <Card className="bg-white border-0 shadow-sm">
           <CardContent className="pt-6 text-center py-12">
@@ -1096,7 +1078,6 @@ function EventsTab({ schoolId }: { schoolId: string }) {
           </CardContent>
         </Card>
       )}
-
       <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
@@ -1173,44 +1154,47 @@ function EventsTab({ schoolId }: { schoolId: string }) {
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }
 
-export default function SchoolDetails() {
-  const params = useParams();
-  const schoolId = params.id as string;
-  const router = useRouter();
-  const [school, setSchool] = useState<SchoolDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState<string>("");
+// Main Dashboard Component
+export default function SchoolAdminDashboard() {
+  const router = useRouter()
+  const [school, setSchool] = useState<SchoolDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [token, setToken] = useState<string>("")
 
   useEffect(() => {
-    const t = localStorage.getItem("token") || "";
-    setToken(t);
+    const t = localStorage.getItem("token") || ""
+    setToken(t)
     if (!t) {
-      router.push("/login");
-      return;
+      router.push("/login")
+      return
     }
-    fetchSchool(t);
-  }, [schoolId, router]);
+    fetchSchool(t)
+  }, [router])
 
   const fetchSchool = async (t: string) => {
     try {
-      console.log("Fetching school:", schoolId);
-      const data = await getSchoolById(schoolId, t);
-      console.log("Loaded school:", data);
-      setSchool({ id: data.id, name: data.name });
+      const user = await getCurrentUser(t)
+      if (!user.school_id) {
+        toast.error("Школа не найдена для текущего пользователя")
+        router.push("/login")
+        return
+      }
+      const data = await getSchoolById(user.school_id, t)
+      setSchool({ id: data.id, name: data.name })
     } catch (err) {
-      console.error("Error fetching school:", err);
-      toast.error("Ошибка загрузки школы");
-      setSchool({ id: schoolId, name: "Неизвестная школа" });
+      console.error("Error fetching school:", err)
+      toast.error("Ошибка загрузки школы")
+      setSchool(null)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  if (loading) return <div>Загрузка...</div>;
-  if (!school) return <div>Школа не найдена</div>;
+  if (loading) return <div>Загрузка...</div>
+  if (!school) return <div>Школа не найдена</div>
 
   return (
     <div className="min-h-screen bg-background">
@@ -1224,37 +1208,43 @@ export default function SchoolDetails() {
             <Link href="/schools">
               <Button variant="outline">← Назад к школам</Button>
             </Link>
-            <Button variant="outline" onClick={() => { localStorage.removeItem("token"); router.push("/login"); }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                localStorage.removeItem("token")
+                router.push("/login")
+              }}
+            >
               <LogOut className="h-4 w-4 mr-2" /> Выйти
             </Button>
           </div>
         </div>
 
         <Tabs defaultValue="admins" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-5">  
             <TabsTrigger value="admins">Админы школы</TabsTrigger>
             <TabsTrigger value="teachers">Преподаватели</TabsTrigger>
             <TabsTrigger value="parents">Родители</TabsTrigger>
-            <TabsTrigger value="students">Студенты</TabsTrigger>
+            <TabsTrigger value="students">Школьники</TabsTrigger>
             <TabsTrigger value="events">Мероприятия</TabsTrigger>
           </TabsList>
           <TabsContent value="admins">
-            <UsersTab schoolId={schoolId} role="school_admin" />
+            <UsersSection schoolId={school.id} role="school_admin" students={[]} />
           </TabsContent>
           <TabsContent value="teachers">
-            <UsersTab schoolId={schoolId} role="teacher" />
+            <UsersSection schoolId={school.id} role="teacher" students={[]} />
           </TabsContent>
           <TabsContent value="parents">
-            <UsersTab schoolId={schoolId} role="parent" />
+            <UsersSection schoolId={school.id} role="parent" students={[]} />
           </TabsContent>
           <TabsContent value="students">
-            <StudentsTab schoolId={schoolId} />
+            <StudentsSection schoolId={school.id} />
           </TabsContent>
           <TabsContent value="events">
-            <EventsTab schoolId={schoolId} />
+            <EventsSection schoolId={school.id} />
           </TabsContent>
         </Tabs>
       </div>
     </div>
-  );
+  )
 }
