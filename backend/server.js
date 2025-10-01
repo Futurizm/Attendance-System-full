@@ -49,7 +49,7 @@ const roleMiddleware = (roles) => (req, res, next) => {
 };
 
 // Login route
-app.post("/api/auth/login", async (req, res) => {
+app.post("/auth/login", async (req, res) => {
   const { email, password, role } = req.body;
   try {
     const user = await User.findOne({ email, role }).populate("school_id");
@@ -71,7 +71,7 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 // Register route for users (teachers, parents, school_admins)
-app.post("/api/auth/register", authMiddleware, roleMiddleware(["school_admin", "main_admin"]), async (req, res) => {
+app.post("/auth/register", authMiddleware, roleMiddleware(["school_admin", "main_admin"]), async (req, res) => {
   const { email, password, role, school_id, name } = req.body;
   try {
     let user = await User.findOne({ email });
@@ -115,7 +115,7 @@ app.post("/api/auth/register", authMiddleware, roleMiddleware(["school_admin", "
 })();
 
 // Add child to parent
-app.put("/api/users/:id/add-child", authMiddleware, roleMiddleware(["school_admin", "main_admin"]), async (req, res) => {
+app.put("/users/:id/add-child", authMiddleware, roleMiddleware(["school_admin", "main_admin"]), async (req, res) => {
   try {
     const { student_id } = req.body;
     const user = await User.findById(req.params.id);
@@ -141,7 +141,7 @@ app.put("/api/users/:id/add-child", authMiddleware, roleMiddleware(["school_admi
 });
 
 // Get my children for parent
-app.get("/api/my-children", authMiddleware, roleMiddleware(["parent"]), async (req, res) => {
+app.get("/my-children", authMiddleware, roleMiddleware(["parent"]), async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).populate("children");
     res.json(user.children);
@@ -152,7 +152,7 @@ app.get("/api/my-children", authMiddleware, roleMiddleware(["parent"]), async (r
 });
 
 // Get my student data for student role
-app.get("/api/my-student", authMiddleware, roleMiddleware(["student"]), async (req, res) => {
+app.get("/my-student", authMiddleware, roleMiddleware(["student"]), async (req, res) => {
   try {
     const student = await Student.findOne({ user_id: req.user.userId }).populate("school_id");
     if (!student) return res.status(404).json({ error: "Student data not found" });
@@ -164,7 +164,7 @@ app.get("/api/my-student", authMiddleware, roleMiddleware(["student"]), async (r
 });
 
 // Schools routes
-app.get("/api/schools", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
+app.get("/schools", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
   try {
     const schools = await School.find().sort({ created_at: -1 });
     console.log("Fetched schools:", schools);
@@ -175,7 +175,7 @@ app.get("/api/schools", authMiddleware, roleMiddleware(["main_admin"]), async (r
   }
 });
 
-app.post("/api/schools", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
+app.post("/schools", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "School name required" });
@@ -189,7 +189,7 @@ app.post("/api/schools", authMiddleware, roleMiddleware(["main_admin"]), async (
   }
 });
 
-app.put("/api/schools/:id", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
+app.put("/schools/:id", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "School name required" });
@@ -203,7 +203,7 @@ app.put("/api/schools/:id", authMiddleware, roleMiddleware(["main_admin"]), asyn
   }
 });
 
-app.delete("/api/schools/:id", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
+app.delete("/schools/:id", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
   try {
     const school = await School.findByIdAndDelete(req.params.id);
     if (!school) return res.status(404).json({ error: "School not found" });
@@ -215,7 +215,7 @@ app.delete("/api/schools/:id", authMiddleware, roleMiddleware(["main_admin"]), a
   }
 });
 
-app.get('/api/schools/:id', authMiddleware, roleMiddleware(['main_admin', 'school_admin', 'teacher', 'parent']), async (req, res) => {
+app.get('/schools/:id', authMiddleware, roleMiddleware(['main_admin', 'school_admin', 'teacher', 'parent']), async (req, res) => {
   try {
     const schoolId = req.params.id;
     // Restrict school_admin, teacher, and parent to their own school
@@ -234,7 +234,7 @@ app.get('/api/schools/:id', authMiddleware, roleMiddleware(['main_admin', 'schoo
 });
 
 // Users routes
-app.get('/api/users', authMiddleware, async (req, res) => {
+app.get('/users', authMiddleware, async (req, res) => {
   try {
     let query = {};
     if (req.user.role === "school_admin") {
@@ -256,7 +256,7 @@ app.get('/api/users', authMiddleware, async (req, res) => {
   }
 });
 
-app.delete("/api/users/:id", authMiddleware, roleMiddleware(["main_admin", "school_admin"]), async (req, res) => {
+app.delete("/users/:id", authMiddleware, roleMiddleware(["main_admin", "school_admin"]), async (req, res) => {
   try {
     const query = req.user.role === "school_admin" ? { _id: req.params.id, school_id: req.user.school_id } : { _id: req.params.id };
     const user = await User.findOneAndDelete(query);
@@ -546,7 +546,7 @@ app.get('/attendance', authMiddleware, async (req, res) => {
 });
 
 // Новый роут для событий конкретной школы
-app.get('/api/events/school/:schoolId', authMiddleware, async (req, res) => {
+app.get('/events/school/:schoolId', authMiddleware, async (req, res) => {
   try {
     const { schoolId } = req.params;
     let query = { school_id: schoolId };
@@ -716,7 +716,7 @@ app.delete("/attendance/:id", authMiddleware, roleMiddleware(["school_admin", "m
 });
 
 // Analytics route
-app.get("/api/analytics", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
+app.get("/analytics", authMiddleware, roleMiddleware(["main_admin"]), async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
     const usersByRole = {

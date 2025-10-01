@@ -24,6 +24,9 @@ interface AnalyticsData {
   attendanceBySchool: { school: string; attendanceCount: number }[];
 }
 
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
+
 export default function AnalyticsPage() {
   const router = useRouter();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
@@ -41,7 +44,7 @@ export default function AnalyticsPage() {
 
   const fetchAnalytics = async (token: string) => {
     try {
-      const response = await fetch("http://localhost:5000/api/analytics", {
+      const response = await fetch(`${API_URL}/analytics`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.status === 401) {

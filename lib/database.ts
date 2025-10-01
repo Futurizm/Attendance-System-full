@@ -112,7 +112,7 @@ export async function addStudent(student: Omit<Student, "id" | "createdAt" | "qr
 
 // Add getMyStudent
 export async function getMyStudent(token: string): Promise<Student | null> {
-  const res = await fetch(`${API_URL}/api/my-student`, {
+  const res = await fetch(`${API_URL}/my-student`, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -138,7 +138,7 @@ export async function getMyStudent(token: string): Promise<Student | null> {
 // Add getMyChildren
 export async function getMyChildren(token: string): Promise<Student[]> {
   console.log("Fetching children with Token:", token.slice(0, 10) + "...");
-  const res = await fetch(`${API_URL}/api/my-children`, {
+  const res = await fetch(`${API_URL}/my-children`, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -168,7 +168,7 @@ export async function getMyChildren(token: string): Promise<Student[]> {
 
 // Add addChildToParent
 export async function addChildToParent(parentId: string, studentId: string, token: string): Promise<User | null> {
-  const res = await fetch(`${API_URL}/api/users/${parentId}/add-child`, {
+  const res = await fetch(`${API_URL}/users/${parentId}/add-child`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -521,7 +521,7 @@ export async function setActiveEvent(eventId: string, token: string): Promise<bo
 }
 
 export async function getAllSchools(token: string): Promise<School[]> {
-  const res = await fetch(`${API_URL}/api/schools`, {
+  const res = await fetch(`${API_URL}/schools`, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -541,7 +541,7 @@ export async function getAllSchools(token: string): Promise<School[]> {
 }
 
 export async function addSchool(name: string, token: string): Promise<School | null> {
-  const res = await fetch(`${API_URL}/api/schools`, {
+  const res = await fetch(`${API_URL}/schools`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -563,7 +563,7 @@ export async function addSchool(name: string, token: string): Promise<School | n
 }
 
 export async function updateSchool(id: string, name: string, token: string): Promise<School | null> {
-  const res = await fetch(`${API_URL}/api/schools/${id}`, {
+  const res = await fetch(`${API_URL}/schools/${id}`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -585,7 +585,7 @@ export async function updateSchool(id: string, name: string, token: string): Pro
 }
 
 export async function deleteSchool(id: string, token: string): Promise<boolean> {
-  const res = await fetch(`${API_URL}/api/schools/${id}`, {
+  const res = await fetch(`${API_URL}/schools/${id}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -601,7 +601,7 @@ export async function deleteSchool(id: string, token: string): Promise<boolean> 
 }
 
 export async function getAllUsers(token: string, schoolId?: string, role?: string): Promise<User[]> {
-  let url = `${API_URL}/api/users`;
+  let url = `${API_URL}/users`;
   if (schoolId) url += `?school_id=${schoolId}`;
   if (role) url += `${schoolId ? '&' : '?'}role=${role}`;
   const res = await fetch(url, {
@@ -627,7 +627,7 @@ export async function getAllUsers(token: string, schoolId?: string, role?: strin
 }
 
 export async function addUser(user: { email: string; password: string; role: string; school_id?: string }, token: string): Promise<User | null> {
-  const res = await fetch(`${API_URL}/api/auth/register`, {
+  const res = await fetch(`${API_URL}/auth/register`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -644,7 +644,7 @@ export async function addUser(user: { email: string; password: string; role: str
 }
 
 export async function deleteUser(id: string, token: string): Promise<boolean> {
-  const res = await fetch(`${API_URL}/api/users/${id}`, {
+  const res = await fetch(`${API_URL}/users/${id}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -660,7 +660,7 @@ export async function deleteUser(id: string, token: string): Promise<boolean> {
 }
 
 export async function getAnalytics(token: string): Promise<AnalyticsData> {
-  const res = await fetch(`${API_URL}/api/analytics`, {
+  const res = await fetch(`${API_URL}/analytics`, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -694,7 +694,7 @@ export async function getAnalytics(token: string): Promise<AnalyticsData> {
 }
 
 export async function getUsersBySchoolAndRole(schoolId: string, role: string, token: string): Promise<User[]> {
-  const res = await fetch(`${API_URL}/api/users?school_id=${schoolId}&role=${role}`, {
+  const res = await fetch(`${API_URL}/users?school_id=${schoolId}&role=${role}`, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -786,7 +786,7 @@ export async function getAttendanceBySchool(schoolId: string, token: string): Pr
 
 export async function getSchoolById(id: string, token: string): Promise<School> {
   console.log("Fetching school with ID:", id, "Token:", token.slice(0, 10) + "...");
-  const res = await fetch(`${API_URL}/api/schools/${id}`, {
+  const res = await fetch(`${API_URL}/schools/${id}`, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",

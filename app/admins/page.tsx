@@ -24,6 +24,8 @@ interface Admin {
   school_id?: { _id: string; name: string };
 }
 
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
 export default function AdminsPage() {
   const router = useRouter();
   const [admins, setAdmins] = useState<Admin[]>([]);
@@ -46,7 +48,7 @@ export default function AdminsPage() {
 
   const fetchAdmins = async (token: string) => {
     try {
-      const response = await fetch("http://localhost:5000/api/users", {
+      const response = await fetch(`${API_URL}/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.status === 401) {
@@ -66,7 +68,7 @@ export default function AdminsPage() {
 
   const fetchSchools = async (token: string) => {
     try {
-      const response = await fetch("http://localhost:5000/api/schools", {
+      const response = await fetch(`${API_URL}/schools`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.status === 401) {
@@ -90,7 +92,7 @@ export default function AdminsPage() {
     }
 
     try {
-      const response = await fetch("http://localhost:5000/api/auth/register", {
+      const response = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -122,7 +124,7 @@ export default function AdminsPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/api/users/${id}`, {
+      const response = await fetch(`${API_URL}/users/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

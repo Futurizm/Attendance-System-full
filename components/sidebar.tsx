@@ -14,7 +14,7 @@ const getNavigation = (role: UserRole, schoolId: string | null) => {
     case "teacher":
       return [
         { name: "Сканер QR", href: "/scanner", icon: QrCode },
-        { name: "Мероприятия", href: schoolId ? `/schools/${schoolId}/events` : "/events", icon: Calendar },
+        { name: "Мероприятия", href: schoolId ? `/events` : "/events", icon: Calendar },
         { name: "Личный Профиль", href: "/profile/teacher", icon: User },
       ];
     case "parent":
@@ -31,7 +31,7 @@ const getNavigation = (role: UserRole, schoolId: string | null) => {
         { name: "Преподаватели", href: "/teachers", icon: Users },
         { name: "Родители", href: "/parents", icon: Users },
         { name: "Школьники", href: "/students", icon: Users },
-        { name: "Мероприятия", href: schoolId ? `/schools/${schoolId}/events` : "/events", icon: Calendar },
+        { name: "Мероприятия", href: schoolId ? `/events` : "/events", icon: Calendar },
         { name: "Аналитика", href: "/analytics", icon: BarChart3 },
         { name: "Отчёты", href: "/reports", icon: FileText },
       ];
