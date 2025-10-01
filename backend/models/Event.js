@@ -1,17 +1,16 @@
 const mongoose = require('mongoose');
 
 const eventSchema = new mongoose.Schema({
-  name: { type: String, required: true, unique: true }, // unique глобально; если нужно per-school, используйте compound index
+  name: { type: String, required: true },
   date: { type: Date, required: true },
   description: { type: String },
   is_active: { type: Boolean, default: false },
-  school_id: {  // ← Добавьте это поле
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'School',
-    required: true
-  }
+  school_id: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
+  teacher_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 }, {
-  timestamps: true  // ← Опционально: добавит createdAt/updatedAt автоматически
+  timestamps: true
 });
+
+eventSchema.index({ school_id: 1, name: 1 }, { unique: true });
 
 module.exports = mongoose.model('Event', eventSchema);

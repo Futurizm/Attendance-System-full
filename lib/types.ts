@@ -27,6 +27,7 @@ export interface Event {
   description?: string;
   is_active: boolean;
   school_id: string;
+  teacher_id?: string; // Ensure this is included
 }
 
 export interface School {

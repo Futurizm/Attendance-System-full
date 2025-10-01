@@ -14,7 +14,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import { getUsersBySchoolAndRole, addUser, deleteUser,
   getStudentsBySchool, addStudent, updateStudent, deleteStudent,
-  getEventsBySchool, addEvent, updateEvent, deleteEvent, toggleEventActive,
+  getEventsBySchool, addEvent, updateEvent, deleteEvent, toggleEventActive,addChildToParent,
   getSchoolById, getAttendanceByEvent, deleteAttendanceRecord // Добавили новые импорты
 } from "@/lib/database"; // Импорт API
 import type { Student, School, Event, AttendanceRecord } from "@/lib/types"; // Добавьте AttendanceRecord в types если нужно
@@ -43,6 +43,8 @@ const studentSchema = z.object({
   group: z.string().min(1, "Группа обязательна"),
   course: z.number().int().min(1).max(4, "Курс от 1 до 4"),
   specialty: z.string().min(1, "Специальность обязательна"),
+  email: z.string().email("Неверный email").min(1, "Email обязателен"),
+  password: z.string().min(8, "Пароль минимум 8 символов"),
   qr_code: z.string().min(1, "QR-код обязателен"),
 });
 
@@ -63,18 +65,25 @@ interface SchoolDetail { id: string; name: string; }
 
 // Компонент для списка пользователей (админы/родители/преподаватели)
 function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
-  const [users, setUsers] = useState<UserForSchool[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [editingUser, setEditingUser] = useState<UserForSchool | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isAddChildDialogOpen, setIsAddChildDialogOpen] = useState(false);
+  const [selectedParent, setSelectedParent] = useState<User | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>("");
 
   useEffect(() => {
     const t = localStorage.getItem("token");
     if (t) setToken(t);
-    if (t) fetchUsers(t);
+    if (t) {
+      fetchUsers(t);
+      if (role === "parent") fetchStudents(t); // Загружаем студентов только для роли parent
+    }
   }, [schoolId, role]);
 
   const fetchUsers = async (t: string) => {
@@ -82,31 +91,39 @@ function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
       const data = await getUsersBySchoolAndRole(schoolId, role, t);
       setUsers(data);
     } catch (err) {
-      console.error(`Error fetching ${role}:`, err); // Добавьте лог для отладки
+      console.error(`Error fetching ${role}:`, err);
       toast.error(`Ошибка загрузки ${role === 'teacher' ? 'преподавателей' : role === 'parent' ? 'родителей' : 'админов'}`);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchStudents = async (t: string) => {
+    try {
+      const data = await getStudentsBySchool(schoolId, t);
+      setStudents(data);
+    } catch (err) {
+      console.error("Error fetching students:", err);
+      toast.error("Ошибка загрузки студентов");
+    }
+  };
+
   const handleCreateOrUpdateUser = async () => {
     if (!token) return;
     try {
-      // Для создания (editingUser null)
       if (!editingUser) {
         await addUser({ email: newEmail, password: newPassword, role, school_id: schoolId }, token);
       } else {
-        // Update: но для пользователей update не реализован в бэкенде, добавь PUT /api/users/:id если нужно
-        // Пока только create/delete
         toast.warning("Обновление пользователей пока не реализовано");
         return;
       }
       await fetchUsers(token);
       setIsDialogOpen(false);
-      setNewEmail(""); setNewPassword("");
+      setNewEmail("");
+      setNewPassword("");
       toast.success("Пользователь создан");
     } catch (err) {
-      console.error("Error creating user:", err); // Добавьте лог
+      console.error("Error creating user:", err);
       toast.error("Ошибка создания пользователя");
     }
   };
@@ -118,8 +135,22 @@ function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
       await fetchUsers(token);
       toast.success("Пользователь удалён");
     } catch (err) {
-      console.error("Error deleting user:", err); // Добавьте лог
+      console.error("Error deleting user:", err);
       toast.error("Ошибка удаления");
+    }
+  };
+
+  const handleAddChild = async () => {
+    if (!token || !selectedParent || !selectedStudentId) return;
+    try {
+      await addChildToParent(selectedParent.id, selectedStudentId, token);
+      toast.success("Ребёнок успешно добавлен к родителю");
+      setIsAddChildDialogOpen(false);
+      setSelectedStudentId("");
+      await fetchUsers(token); // Обновляем список пользователей, чтобы отобразить новых детей
+    } catch (err) {
+      console.error("Error adding child:", err);
+      toast.error("Ошибка при добавлении ребёнка");
     }
   };
 
@@ -130,7 +161,9 @@ function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Список {role === 'teacher' ? 'преподавателей' : role === 'parent' ? 'родителей' : 'админов школы'}</h2>
+        <h2 className="text-xl font-bold">
+          Список {role === 'teacher' ? 'преподавателей' : role === 'parent' ? 'родителей' : 'админов школы'}
+        </h2>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" /> Добавить</Button>
@@ -164,9 +197,42 @@ function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
             </CardHeader>
             <CardContent>
               <p>Создан: {user.createdAt.toLocaleDateString("ru-RU")}</p>
+              {role === "parent" && (
+                <div className="mt-2">
+                  <p className="font-semibold">Дети:</p>
+                  {user.children && user.children.length > 0 ? (
+                    <ul className="list-disc pl-5">
+                      {user.children.map((childId) => {
+                        const child = students.find((s) => s.id === childId);
+                        return (
+                          <li key={childId}>
+                            {child ? `${child.name} (${child.group}, ${child.course} курс)` : "Неизвестный студент"}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p>Нет привязанных детей</p>
+                  )}
+                  <Button
+                    variant="outline"
+                    className="mt-2"
+                    onClick={() => {
+                      setSelectedParent(user);
+                      setIsAddChildDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" /> Добавить ребёнка
+                  </Button>
+                </div>
+              )}
               <div className="flex gap-2 mt-2">
-                {/* Edit dialog аналогично create, но с PUT */}
-                <Button variant="outline" onClick={() => { /* setEditingUser(user); setIsDialogOpen(true); */ toast.info("Редактирование в разработке"); }}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    toast.info("Редактирование в разработке");
+                  }}
+                >
                   <Edit className="h-4 w-4 mr-2" /> Редактировать
                 </Button>
                 <Button variant="destructive" onClick={() => handleDeleteUser(user.id)}>
@@ -177,6 +243,39 @@ function UsersTab({ schoolId, role }: { schoolId: string; role: string }) {
           </Card>
         ))}
       </div>
+
+      {/* Диалог для добавления ребёнка */}
+      <Dialog open={isAddChildDialogOpen} onOpenChange={setIsAddChildDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Добавить ребёнка к {selectedParent?.email}</DialogTitle>
+            <DialogDescription>Выберите студента для привязки к родителю.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Студент</Label>
+              <Select
+                value={selectedStudentId}
+                onValueChange={setSelectedStudentId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите студента" />
+                </SelectTrigger>
+                <SelectContent>
+                  {students.map((student) => (
+                    <SelectItem key={student.id} value={student.id}>
+                      {student.name} ({student.group}, {student.course} курс)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleAddChild} disabled={!selectedStudentId}>
+              Добавить
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -225,6 +324,28 @@ function StudentsTab({ schoolId }: { schoolId: string }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+  if (editingStudent) {
+    form.reset({
+      name: editingStudent.name,
+      group: editingStudent.group,
+      course: editingStudent.course,
+      specialty: editingStudent.specialty,
+      email: "", // Add if editing includes email/password, but may need to fetch them separately
+      password: "", // Password can't be fetched (hashed), so for edit, perhaps skip or generate new
+    });
+  } else {
+    form.reset({
+      name: "",
+      group: "",
+      course: 1,
+      specialty: "",
+      email: "",
+      password: "",
+    });
+  }
+}, [editingStudent, form]);
 
   useEffect(() => {
     const newQrCode = crypto.randomUUID();
@@ -389,20 +510,16 @@ function StudentsTab({ schoolId }: { schoolId: string }) {
                     {form.formState.errors.specialty && <p className="text-red-500 text-sm">{form.formState.errors.specialty.message}</p>}
                   </div>
                   <div>
-                    <Label>QR-код</Label>
-                    <div className="mt-2 flex justify-center">
-                      {form.watch("qr_code") && qrCodeURL && !qrError ? (
-                        <div className="p-4 bg-white rounded-lg border-2 border-primary/20">
-                          <img src={qrCodeURL} alt="QR-код" className="w-64 h-64" />
-                        </div>
-                      ) : qrError ? (
-                        <p className="w-64 h-64 flex items-center justify-center text-red-500 text-center">{qrError}</p>
-                      ) : (
-                        <p className="text-gray-500 text-sm">QR-код будет сгенерирован после заполнения формы</p>
-                      )}
-                    </div>
-                    <Input id="qr_code" {...form.register("qr_code")} type="hidden" />
+                    <Label htmlFor="email">Email (для аккаунта студента)</Label>
+                    <Input id="email" type="email" {...form.register("email")} />
+                    {form.formState.errors.email && <p className="text-red-500 text-sm">{form.formState.errors.email.message}</p>}
                   </div>
+                  <div>
+                    <Label htmlFor="password">Пароль (для аккаунта студента)</Label>
+                    <Input id="password" type="password" {...form.register("password")} />
+                    {form.formState.errors.password && <p className="text-red-500 text-sm">{form.formState.errors.password.message}</p>}
+                  </div>
+                  {/* Remove qr_code field and generation, as backend handles it */}
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
                       Отмена
@@ -522,29 +639,42 @@ function EventsTab({ schoolId }: { schoolId: string }) {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<Event | null>(null);
+  const [teachers, setTeachers] = useState<User[]>([]); // New state for teachers
   const [token, setToken] = useState<string | null>(null);
 
-  const form = useForm<EventFormData>({
-    resolver: zodResolver(eventSchema),
+  const form = useForm<EventFormData & { teacher_id?: string }>({ // Extend form to include teacher_id
+    resolver: zodResolver(eventSchema.extend({ teacher_id: z.string().min(1, "Преподаватель обязателен") })),
     defaultValues: {
       name: "",
       date: "",
       description: "",
+      teacher_id: "",
     },
   });
 
   useEffect(() => {
     const t = localStorage.getItem("token");
     if (t) setToken(t);
-    if (t) loadEvents(t);
+    if (t) {
+      loadEvents(t);
+      loadTeachers(t); // Fetch teachers
+    }
   }, [schoolId]);
+
+  const loadTeachers = async (t: string) => {
+    try {
+      const fetchedTeachers = await getUsersBySchoolAndRole(schoolId, "teacher", t);
+      setTeachers(fetchedTeachers);
+    } catch (error: any) {
+      console.error("Error loading teachers:", error);
+      toast.error("Ошибка при загрузке преподавателей");
+    }
+  };
 
   const loadEvents = async (t: string) => {
     try {
       setLoading(true);
-      console.log("Fetching events for school:", schoolId, "with token:", t ? t.slice(0, 10) + "..." : "no token");
       const fetchedEvents = await getEventsBySchool(schoolId, t);
-      console.log("Loaded events:", fetchedEvents);
       const attendancePromises = fetchedEvents.map(async (event) => ({
         eventName: event.name,
         attendance: await getAttendanceByEvent(event.name, t),
@@ -555,7 +685,7 @@ function EventsTab({ schoolId }: { schoolId: string }) {
       setAttendanceMap(newAttendanceMap);
     } catch (error: any) {
       console.error("Error loading events:", error);
-      toast.error("Ошибка при загрузке мероприятий: " + (error.message || "Неизвестная ошибка"));
+      toast.error("Ошибка при загрузке мероприятий");
     } finally {
       setLoading(false);
     }
@@ -565,19 +695,21 @@ function EventsTab({ schoolId }: { schoolId: string }) {
     if (editingEvent) {
       form.reset({
         name: editingEvent.name,
-        date: editingEvent.date.toISOString().split('T')[0], // Формат для input type="date"
+        date: editingEvent.date.toISOString().split('T')[0],
         description: editingEvent.description || "",
+        teacher_id: editingEvent.teacher_id || "",
       });
     } else {
       form.reset({
         name: "",
         date: "",
         description: "",
+        teacher_id: teachers.length > 0 ? teachers[0].id : "",
       });
     }
-  }, [editingEvent, form]);
+  }, [editingEvent, teachers, form]);
 
-  const onSubmit = async (data: EventFormData) => {
+  const onSubmit = async (data: EventFormData & { teacher_id?: string }) => {
     if (!token) {
       toast.error("Токен не найден. Войдите в систему.");
       return;
@@ -586,8 +718,9 @@ function EventsTab({ schoolId }: { schoolId: string }) {
       const eventData = {
         ...data,
         date: new Date(data.date),
-        is_active: editingEvent ? editingEvent.is_active : false, // По умолчанию неактивно
+        is_active: editingEvent ? editingEvent.is_active : false,
         school_id: schoolId,
+        teacher_id: data.teacher_id, // Include teacher_id
       };
       console.log("Submitting event data:", eventData);
       let updatedEvent: Event | null = null;
@@ -613,6 +746,7 @@ function EventsTab({ schoolId }: { schoolId: string }) {
         name: "",
         date: "",
         description: "",
+        teacher_id: teachers.length > 0 ? teachers[0].id : "",
       });
       setTimeout(() => loadEvents(token), 500);
     } catch (error: any) {
@@ -721,6 +855,25 @@ function EventsTab({ schoolId }: { schoolId: string }) {
                   <div>
                     <Label htmlFor="description">Описание</Label>
                     <Input id="description" {...form.register("description")} placeholder="Опционально" />
+                  </div>
+                  <div>
+                    <Label htmlFor="teacher_id">Преподаватель</Label>
+                    <Select
+                      value={form.watch("teacher_id") || ""}
+                      onValueChange={(value) => form.setValue("teacher_id", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Выберите преподавателя" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teachers.map((teacher) => (
+                          <SelectItem key={teacher.id} value={teacher.id}>
+                            {teacher.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {form.formState.errors.teacher_id && <p className="text-red-500 text-sm">{form.formState.errors.teacher_id.message}</p>}
                   </div>
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>

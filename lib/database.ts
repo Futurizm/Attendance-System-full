@@ -84,23 +84,20 @@ export async function getStudentByqr_code(qr_code: string, token: string): Promi
   };
 }
 
-export async function addStudent(student: Omit<Student, "id" | "createdAt"> & { school_id?: string }, token: string): Promise<Student | null> {
+export async function addStudent(student: Omit<Student, "id" | "createdAt" | "qr_code"> & { email: string, password: string, enrolled_events?: string[], school_id?: string }, token: string): Promise<Student | null> {
   const res = await fetch(`${API_URL}/students`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(student), // Теперь включает school_id если передан
+    body: JSON.stringify(student),
   });
-  console.log("Response status:", res.status);
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-    console.error("Backend error:", errorData);
     throw new Error(`Error adding student: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
   }
   const addedStudent = await res.json();
-  console.log("Added student:", addedStudent);
   return {
     id: addedStudent._id,
     name: addedStudent.name,
@@ -108,8 +105,88 @@ export async function addStudent(student: Omit<Student, "id" | "createdAt"> & { 
     course: addedStudent.course,
     specialty: addedStudent.specialty,
     qr_code: addedStudent.qr_code,
-    school_id: addedStudent.school_id?._id || addedStudent.school_id,  // Поддержка populate
+    school_id: addedStudent.school_id,
     createdAt: new Date(addedStudent.created_at),
+  };
+}
+
+// Add getMyStudent
+export async function getMyStudent(token: string): Promise<Student | null> {
+  const res = await fetch(`${API_URL}/api/my-student`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(`Error fetching my student: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  const student = await res.json();
+  return {
+    id: student._id,
+    name: student.name,
+    group: student.group,
+    course: student.course,
+    specialty: student.specialty,
+    qr_code: student.qr_code,
+    school_id: student.school_id,
+    createdAt: new Date(student.created_at),
+  };
+}
+
+// Add getMyChildren
+export async function getMyChildren(token: string): Promise<Student[]> {
+  console.log("Fetching children with Token:", token.slice(0, 10) + "...");
+  const res = await fetch(`${API_URL}/api/my-children`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    console.error("Error fetching children:", {
+      status: res.status,
+      statusText: res.statusText,
+      error: errorData.error,
+    });
+    throw new Error(`Error fetching children: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  const childrenData = await res.json();
+  return childrenData.map((child: any) => ({
+    id: child._id,
+    name: child.name,
+    group: child.group || "", // Fallback to empty string if null
+    course: child.course || 0, // Fallback to 0 if null
+    specialty: child.specialty || "", // Fallback to empty string if null
+    qr_code: child.qr_code,
+    school_id: child.school_id,
+    createdAt: new Date(child.created_at),
+  }));
+}
+
+// Add addChildToParent
+export async function addChildToParent(parentId: string, studentId: string, token: string): Promise<User | null> {
+  const res = await fetch(`${API_URL}/api/users/${parentId}/add-child`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ student_id: studentId }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(`Error adding child: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  const updatedUser = await res.json();
+  return {
+    id: updatedUser._id,
+    email: updatedUser.email,
+    role: updatedUser.role,
+    school_id: updatedUser.school_id,
+    createdAt: new Date(updatedUser.created_at),
   };
 }
 
@@ -351,7 +428,10 @@ export async function addEvent(event: Omit<Event, "id">, token: string): Promise
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(event),
+    body: JSON.stringify({
+      ...event,
+      date: event.date.toISOString(), // Ensure date is sent in ISO format
+    }),
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
@@ -366,6 +446,37 @@ export async function addEvent(event: Omit<Event, "id">, token: string): Promise
     description: addedEvent.description,
     is_active: addedEvent.is_active,
     school_id: addedEvent.school_id,
+    teacher_id: addedEvent.teacher_id, // Include teacher_id in response
+  };
+}
+
+export async function updateEvent(id: string, updates: Partial<Omit<Event, "id">>, token: string): Promise<Event | null> {
+  console.log("Updating event with data:", JSON.stringify(updates, null, 2));
+  const res = await fetch(`${API_URL}/events/${id}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ...updates,
+      date: updates.date ? updates.date.toISOString() : undefined,
+    }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    console.error("Error updating event:", errorData);
+    throw new Error(`Error updating event: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
+  }
+  const updatedEvent = await res.json();
+  return {
+    id: updatedEvent._id,
+    name: updatedEvent.name,
+    date: new Date(updatedEvent.date),
+    description: updatedEvent.description,
+    is_active: updatedEvent.is_active,
+    school_id: updatedEvent.school_id,
+    teacher_id: updatedEvent.teacher_id,
   };
 }
 
@@ -601,6 +712,7 @@ export async function getUsersBySchoolAndRole(schoolId: string, role: string, to
     school_id: user.school_id?._id,
     school: user.school_id ? { id: user.school_id._id, name: user.school_id.name } : undefined,
     createdAt: new Date(user.created_at),
+    children: user.children ? user.children.map((child: any) => child._id) : [], // Преобразуем children в массив ID
   }));
 }
 
@@ -673,6 +785,7 @@ export async function getAttendanceBySchool(schoolId: string, token: string): Pr
 }
 
 export async function getSchoolById(id: string, token: string): Promise<School> {
+  console.log("Fetching school with ID:", id, "Token:", token.slice(0, 10) + "...");
   const res = await fetch(`${API_URL}/api/schools/${id}`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -681,6 +794,12 @@ export async function getSchoolById(id: string, token: string): Promise<School> 
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+    console.error("Error fetching school:", {
+      status: res.status,
+      statusText: res.statusText,
+      error: errorData.error,
+      schoolId: id,
+    });
     throw new Error(`Error fetching school: ${res.status} ${res.statusText} - ${errorData.error || "Unknown error"}`);
   }
   const schoolData = await res.json();
@@ -690,3 +809,4 @@ export async function getSchoolById(id: string, token: string): Promise<School> 
     createdAt: new Date(schoolData.created_at),
   };
 }
+

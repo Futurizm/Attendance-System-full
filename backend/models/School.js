@@ -1,3 +1,4 @@
+// No changes
 const mongoose = require('mongoose');
 
 const SchoolSchema = new mongoose.Schema({

@@ -8,6 +8,7 @@ import { Users, QrCode, Calendar, BarChart3, FileSpreadsheet, Settings, LogOut }
 import { AttendanceDashboard } from "@/components/attendance-dashboard";
 import { getAllAttendanceRecords, getAllStudents, getAllEvents, getActiveEvent } from "@/lib/database";
 import Link from "next/link";
+import {jwtDecode} from "jwt-decode";
 
 export default function HomePage() {
   const router = useRouter();
@@ -16,11 +17,29 @@ export default function HomePage() {
   const [events, setEvents] = useState([]);
   const [activeEvent, setActiveEvent] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState<string>("");
 
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
       router.push("/login");
+      return;
+    }
+    const decoded: any = jwtDecode(token);
+    setRole(decoded.role);
+
+    if (decoded.role !== "school_admin" && decoded.role !== "main_admin" && decoded.role !== "teacher" && decoded.role !== "parent") {
+      router.push("/profile");
+      return;
+    }
+
+    if (decoded.role === "teacher") {
+      router.push("/profile/teacher");
+      return;
+    }
+
+    if (decoded.role === "parent") {
+      router.push("/profile/parent");
       return;
     }
 

@@ -153,22 +153,6 @@ export default function LoginPage() {
                 {loading ? "Вход..." : "Войти"}
               </Button>
             </form>
-            <div className="mt-6 p-4 bg-muted rounded-md border-2 border-border">
-              <p className="text-xs font-bold uppercase text-foreground mb-2">Демо данные для входа:</p>
-              <p className="text-sm text-muted-foreground">
-                Email: <span className="font-mono">admin@education.gov</span>
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Пароль: <span className="font-mono">admin123</span>
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Роль: <span className="font-mono">Главный админ</span>
-              </p>
-            </div>
-            <Button variant="outline" onClick={handleLogout} className="mt-4 w-full">
-              <LogOut className="h-4 w-4 mr-2" />
-              Выйти
-            </Button>
           </CardContent>
         </Card>
       </div>

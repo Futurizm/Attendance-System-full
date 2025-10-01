@@ -3,36 +3,54 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Users, QrCode, Calendar, BarChart3, FileText, Menu, X, School, UserCog } from "lucide-react";
+import { Home, Users, QrCode, Calendar, BarChart3, FileText, Menu, X, School, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import {jwtDecode} from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
+import type { UserRole } from "@/lib/types";
 
-const getNavigation = (role: string) => {
-  const baseNav = [
-    { name: "Главная", href: "/", icon: Home },
-    { name: "Студенты", href: "/students", icon: Users },
-    { name: "Сканер QR", href: "/scanner", icon: QrCode },
-    { name: "Мероприятия", href: "/events", icon: Calendar },
-    { name: "Аналитика", href: "/analytics", icon: BarChart3 },
-    { name: "Отчеты", href: "/reports", icon: FileText },
-  ];
-
-  if (role === "main_admin") {
-    return [
-      ...baseNav,
-      { name: "Школы", href: "/schools", icon: School },
-      { name: "Админы", href: "/admins", icon: UserCog },
-    ];
+const getNavigation = (role: UserRole, schoolId: string | null) => {
+  switch (role) {
+    case "teacher":
+      return [
+        { name: "Сканер QR", href: "/scanner", icon: QrCode },
+        { name: "Мероприятия", href: schoolId ? `/schools/${schoolId}/events` : "/events", icon: Calendar },
+        { name: "Личный Профиль", href: "/profile/teacher", icon: User },
+      ];
+    case "parent":
+      return [
+        { name: "Личный Профиль", href: "/profile/parent", icon: User },
+      ];
+    case "student":
+      return [
+        { name: "Личный Профиль", href: "/profile", icon: User },
+      ];
+    case "school_admin":
+      return [
+        { name: "Главная", href: "/", icon: Home },
+        { name: "Преподаватели", href: "/teachers", icon: Users },
+        { name: "Родители", href: "/parents", icon: Users },
+        { name: "Школьники", href: "/students", icon: Users },
+        { name: "Мероприятия", href: schoolId ? `/schools/${schoolId}/events` : "/events", icon: Calendar },
+        { name: "Аналитика", href: "/analytics", icon: BarChart3 },
+        { name: "Отчёты", href: "/reports", icon: FileText },
+      ];
+    case "main_admin":
+      return [
+        { name: "Главная", href: "/", icon: Home },
+        { name: "Школы", href: "/schools", icon: School },
+        { name: "Аналитика", href: "/analytics", icon: BarChart3 },
+        { name: "Отчёты", href: "/reports", icon: FileText },
+      ];
+    default:
+      return [];
   }
-
-  return baseNav;
 };
 
 export function Sidebar() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [role, setRole] = useState<string>("");
+  const [role, setRole] = useState<UserRole | "">("");
   const [schoolId, setSchoolId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,7 +66,7 @@ export function Sidebar() {
     }
   }, []);
 
-  const navigation = getNavigation(role);
+  const navigation = getNavigation(role, schoolId);
 
   return (
     <>
@@ -85,8 +103,8 @@ export function Sidebar() {
                 <QrCode className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-lg font-semibold text-gray-900">AttendanceIT</h1>
-                <p className="text-sm text-gray-500">Колледж ИТ</p>
+                <h1 className="text-lg font-semibold text-gray-900">Uirme</h1>
+                <p className="text-sm text-gray-500">Система контроля посещаемости внеклассных мероприятий</p>
               </div>
             </div>
           </div>
